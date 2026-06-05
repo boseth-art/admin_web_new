@@ -18,7 +18,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <Typography sx={{ color: '#94A3B8', fontSize: '0.75rem', mb: 0.5 }}>{label}</Typography>
       {payload.map((p) => (
         <Typography key={p.name} sx={{ color: p.color, fontSize: '0.82rem', fontWeight: 600 }}>
-          {p.name}: {typeof p.value === 'number' && p.value > 1000 ? `$${(p.value / 1000).toFixed(0)}K` : p.value}
+          {p.name}: {typeof p.value === 'number' && p.value > 1000 ? `Rs. ${(p.value / 1000).toFixed(0)}K` : p.value}
         </Typography>
       ))}
     </Box>
@@ -153,7 +153,7 @@ export default function AnalyticsPage() {
                   <BarChart data={revenue} barGap={4}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,212,191,0.06)" />
                     <XAxis dataKey="month" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v / 1000}K`} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `Rs. ${v / 1000}K`} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="income"  name="Income"  fill="#2DD4BF" radius={[4, 4, 0, 0]} maxBarSize={32} fillOpacity={0.9} />
                     <Bar dataKey="expense" name="Expense" fill="#6366F1" radius={[4, 4, 0, 0]} maxBarSize={32} fillOpacity={0.8} />

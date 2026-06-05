@@ -85,7 +85,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <Typography sx={{ color: '#94A3B8', fontSize: '0.75rem', mb: 0.5 }}>{label}</Typography>
       {payload.map((p) => (
         <Typography key={p.name} sx={{ color: p.color, fontSize: '0.82rem', fontWeight: 600 }}>
-          {p.name}: ${(p.value / 1000).toFixed(0)}K
+          {p.name}: Rs. {(p.value / 1000).toFixed(0)}K
         </Typography>
       ))}
     </Box>
@@ -230,7 +230,7 @@ export default function DashboardPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,212,191,0.06)" />
                     <XAxis dataKey="month" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v / 1000}K`} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `Rs. ${v / 1000}K`} />
                     <RechartsTooltip content={<CustomTooltip />} />
                     <Area type="monotone" dataKey="income"  name="Income"  stroke="#2DD4BF" strokeWidth={2.5} fill="url(#incomeGrad)"  dot={false} activeDot={{ r: 5, fill: '#2DD4BF' }} />
                     <Area type="monotone" dataKey="expense" name="Expense" stroke="#6366F1" strokeWidth={2}   fill="url(#expenseGrad)" dot={false} activeDot={{ r: 5, fill: '#6366F1' }} />
@@ -296,7 +296,7 @@ export default function DashboardPage() {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
                         <Typography sx={{ color: '#94A3B8', fontSize: '0.83rem', fontWeight: 500 }}>{category}</Typography>
                         <Box sx={{ display: 'flex', gap: 2 }}>
-                          <Typography sx={{ color: '#64748B', fontSize: '0.78rem' }}>${(amount / 1000).toFixed(0)}K</Typography>
+                          <Typography sx={{ color: '#64748B', fontSize: '0.78rem' }}>Rs. {(amount / 1000).toFixed(0)}K</Typography>
                           <Typography sx={{ color: colors[i % colors.length], fontSize: '0.78rem', fontWeight: 700 }}>{percentage}%</Typography>
                         </Box>
                       </Box>
@@ -380,7 +380,7 @@ export default function DashboardPage() {
                         <TableCell><Typography sx={{ color: '#94A3B8', fontSize: '0.83rem' }}>{category}</Typography></TableCell>
                         <TableCell align="right">
                           <Typography sx={{ color: amount >= 0 ? '#34D399' : '#F87171', fontWeight: 700, fontSize: '0.88rem' }}>
-                            {amount >= 0 ? '+' : ''}{amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                            {amount >= 0 ? '+' : '-'}{'Rs. '}{Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </Typography>
                         </TableCell>
                         <TableCell><Typography sx={{ color: '#64748B', fontSize: '0.8rem' }}>{date}</Typography></TableCell>

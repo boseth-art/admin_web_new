@@ -91,9 +91,9 @@ export default function TransactionsPage() {
       {/* Summary */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {[
-          { label: 'Total Income',  value: `+$${totalIncome.toFixed(2)}`,              icon: <TrendingUpIcon />,   color: '#34D399' },
-          { label: 'Total Expense', value: `-$${totalExpense.toFixed(2)}`,             icon: <TrendingDownIcon />, color: '#F87171' },
-          { label: 'Net Flow',      value: `$${(totalIncome - totalExpense).toFixed(2)}`, icon: <TrendingUpIcon />,   color: '#2DD4BF' },
+          { label: 'Total Income',  value: `+Rs. ${totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <TrendingUpIcon />,   color: '#34D399' },
+          { label: 'Total Expense', value: `-Rs. ${totalExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <TrendingDownIcon />, color: '#F87171' },
+          { label: 'Net Flow',      value: `${(totalIncome - totalExpense) >= 0 ? '+' : '-'}Rs. ${Math.abs(totalIncome - totalExpense).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <TrendingUpIcon />,   color: '#2DD4BF' },
           { label: 'Total Count',   value: transactions.length,                         icon: null,                color: '#A78BFA' },
         ].map(({ label, value, color }) => (
           <Grid item xs={6} md={3} key={label}>
@@ -175,7 +175,7 @@ export default function TransactionsPage() {
                         </TableCell>
                         <TableCell align="right">
                           <Typography sx={{ color: amount >= 0 ? '#34D399' : '#F87171', fontWeight: 700, fontSize: '0.88rem' }}>
-                            {amount >= 0 ? '+' : ''}{amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                            {amount >= 0 ? '+' : '-'}{'Rs. '}{Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </Typography>
                         </TableCell>
                         <TableCell>

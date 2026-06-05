@@ -167,7 +167,7 @@ export default function SettingsPage() {
               <Typography variant="h6" fontWeight={700} sx={{ color: '#F0F6FF', mb: 3 }}>Notification Preferences</Typography>
               {[
                 { label: 'New user registrations', sub: 'Alert when a new user signs up',     def: true  },
-                { label: 'Large transactions',      sub: 'Flag transactions over $5,000',     def: true  },
+                { label: 'Large transactions',      sub: 'Flag transactions over Rs. 5,000',     def: true  },
                 { label: 'Failed logins',           sub: 'Suspicious login attempts',         def: true  },
                 { label: 'System backup alerts',    sub: 'Backup completion notifications',   def: false },
                 { label: 'Weekly digest',           sub: 'Summary report every Monday',       def: false },

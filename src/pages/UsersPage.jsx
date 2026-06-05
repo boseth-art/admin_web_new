@@ -174,7 +174,7 @@ export default function UsersPage() {
                           <Chip label={plan} size="small" sx={{ background: p.bg, color: p.color, border: `1px solid ${p.border}`, fontWeight: 600, fontSize: '0.72rem' }} />
                         </TableCell>
                         <TableCell align="right">
-                          <Typography sx={{ color: '#F0F6FF', fontWeight: 700, fontSize: '0.88rem' }}>${balance.toLocaleString()}</Typography>
+                          <Typography sx={{ color: '#F0F6FF', fontWeight: 700, fontSize: '0.88rem' }}>Rs. {balance.toLocaleString()}</Typography>
                         </TableCell>
                         <TableCell align="right">
                           <Typography sx={{ color: '#94A3B8', fontSize: '0.85rem' }}>{transactions}</Typography>
