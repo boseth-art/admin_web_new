@@ -1,0 +1,498 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import {
+  Box, Card, CardContent, TextField, Button, Typography,
+  InputAdornment, IconButton, Alert, Divider, CircularProgress,
+  LinearProgress,
+} from '@mui/material';
+import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+
+import { useAuth } from '../App';
+import { auth, db } from '../data/firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import {
+  sanitiseInput,
+  validateEmail,
+  validatePassword,
+  checkLockout,
+  recordFailedAttempt,
+  clearLockout,
+  formatLockoutRemaining,
+  MAX_LOGIN_ATTEMPTS,
+} from '../security/authSecurity';
+
+// ─── Decorative background orb ───────────────────────────────────────────────
+const BgOrb = ({ sx }) => (
+  <Box
+    aria-hidden="true"
+    sx={{
+      position: 'absolute',
+      borderRadius: '50%',
+      filter: 'blur(80px)',
+      pointerEvents: 'none',
+      ...sx,
+    }}
+  />
+);
+
+// ─── Feature list ─────────────────────────────────────────────────────────────
+const FEATURES = [
+  { icon: <BarChartIcon />,      label: 'Real-time Analytics & Reports'    },
+  { icon: <ShieldOutlinedIcon />, label: 'Bank-grade 256-bit Encryption'   },
+  { icon: <PhoneAndroidIcon />,  label: 'Seamless Mobile App Sync'         },
+  { icon: <AutoAwesomeIcon />,   label: 'AI-Powered Financial Insights'    },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function LoginPage() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  // ── Form state ──────────────────────────────────────────────────────────
+  const [form, setForm]       = useState({ email: '', password: '' });
+  const [touched, setTouched] = useState({ email: false, password: false });
+  const [showPwd, setShowPwd] = useState(false);
+  const [error, setError]     = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // ── Lockout state ───────────────────────────────────────────────────────
+  const [locked, setLocked]         = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(0);
+
+  // ── Derive inline validation errors ────────────────────────────────────
+  const emailError    = touched.email    ? validateEmail(form.email).message    : '';
+  const passwordError = touched.password ? validatePassword(form.password).message : '';
+  const formValid     = !emailError && !passwordError && form.email && form.password;
+
+  // ── Check for post-logout reason param ─────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const reason = params.get('reason');
+    if (reason === 'idle')    setInfoMsg('You were logged out due to inactivity.');
+    if (reason === 'expired') setInfoMsg('Your session has expired. Please sign in again.');
+  }, [location.search]);
+
+  // ── Auto-redirect if already signed in as admin ─────────────────────────
+  useEffect(() => {
+    if (user && !authLoading) navigate('/dashboard', { replace: true });
+  }, [user, authLoading, navigate]);
+
+  // ── Lockout ticker ──────────────────────────────────────────────────────
+  const refreshLockout = useCallback(() => {
+    const { locked: isLocked, remainingMs } = checkLockout();
+    setLocked(isLocked);
+    setLockRemaining(remainingMs);
+    return isLocked;
+  }, []);
+
+  useEffect(() => {
+    refreshLockout();
+    const id = setInterval(() => {
+      const stillLocked = refreshLockout();
+      if (!stillLocked) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [refreshLockout]);
+
+  // ── Input handling ──────────────────────────────────────────────────────
+  const handleChange = (e) => {
+    // Sanitise on input to prevent XSS / injection
+    const raw       = e.target.value;
+    const fieldName = e.target.name;
+    // For password we only trim length; do NOT strip quotes (valid in passwords)
+    const sanitised = fieldName === 'password'
+      ? raw.slice(0, 512)
+      : sanitiseInput(raw, 320);
+
+    setForm((prev) => ({ ...prev, [fieldName]: sanitised }));
+    setError('');
+  };
+
+  const handleBlur = (e) => {
+    setTouched((prev) => ({ ...prev, [e.target.name]: true }));
+  };
+
+  // ── Submit ───────────────────────────────────────────────────────────────
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Mark all fields touched to show inline errors
+    setTouched({ email: true, password: true });
+
+    // Guard: lockout
+    if (refreshLockout()) {
+      setError(`Too many failed attempts. Please wait ${formatLockoutRemaining(lockRemaining)}.`);
+      return;
+    }
+
+    // Guard: client-side validation
+    const emailV    = validateEmail(form.email);
+    const passwordV = validatePassword(form.password);
+    if (!emailV.ok)    { setError(emailV.message);    return; }
+    if (!passwordV.ok) { setError(passwordV.message); return; }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // 1. Firebase authentication (email/password — NoSQL, not SQL)
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        form.email.trim().toLowerCase(),
+        form.password
+      );
+      const firebaseUser = userCredential.user;
+
+      // 2. Role verification in Firestore
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc    = await getDoc(userDocRef);
+
+      if (userDoc.exists() && userDoc.data().role === 'admin') {
+        // Success — clear brute-force counter and proceed
+        clearLockout();
+        navigate('/dashboard', { replace: true });
+      } else {
+        // Not an admin — revoke Firebase session immediately
+        await signOut(auth);
+        const { locked: nowLocked } = recordFailedAttempt();
+        if (nowLocked) {
+          setError(`Access denied. Account locked for ${formatLockoutRemaining(LOCKOUT_DURATION_MS)}.`);
+        } else {
+          setError('Access denied: Administrators only.');
+        }
+        setLocked(nowLocked);
+      }
+    } catch (err) {
+      console.error('[FinGuard] Authentication error:', err.code);
+
+      // Generic error map — do NOT leak specific reasons to the UI
+      let msg = 'Sign-in failed. Please check your credentials.';
+      if (
+        err.code === 'auth/user-not-found'    ||
+        err.code === 'auth/wrong-password'    ||
+        err.code === 'auth/invalid-credential'
+      ) {
+        msg = 'Invalid email or password.';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/too-many-requests') {
+        msg = 'Too many failed attempts. Firebase has temporarily blocked this account. Try again later.';
+        // Still record locally so UI locks too
+      } else if (err.code === 'auth/network-request-failed') {
+        msg = 'Network error. Please check your connection.';
+      }
+
+      // Record failed attempt (brute-force guard)
+      const { locked: nowLocked, attemptsLeft } = recordFailedAttempt();
+      refreshLockout();
+
+      if (nowLocked) {
+        msg = `Too many failed attempts. Please wait ${formatLockoutRemaining(LOCKOUT_DURATION_MS)} before trying again.`;
+      } else if (attemptsLeft > 0 && attemptsLeft <= 2) {
+        msg += ` (${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining)`;
+      }
+
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Lockout countdown string ─────────────────────────────────────────────
+  const lockCountdown = formatLockoutRemaining(lockRemaining);
+
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        background: 'linear-gradient(135deg, #070D18 0%, #0D1B2A 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Background orbs */}
+      <BgOrb sx={{ width: 500, height: 500, background: 'rgba(45,212,191,0.06)', top: -150, left: -100 }} />
+      <BgOrb sx={{ width: 400, height: 400, background: 'rgba(99,102,241,0.06)', bottom: -100, right: -80 }} />
+      <BgOrb sx={{ width: 300, height: 300, background: 'rgba(52,211,153,0.04)', top: '40%', left: '30%' }} />
+
+      {/* ── Left Branding Panel ─────────────────────────────────────────── */}
+      <Box
+        sx={{
+          flex: 1,
+          display: { xs: 'none', md: 'flex' },
+          flexDirection: 'column',
+          justifyContent: 'center',
+          px: 8,
+          position: 'relative',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 5 }}>
+          <Box
+            component="img"
+            src="/images/logo.png"
+            alt="FinGuard Logo"
+            sx={{ width: 56, height: 56, objectFit: 'contain' }}
+          />
+          <Typography variant="h4" fontWeight={800} sx={{ color: '#F0F6FF', letterSpacing: '-0.02em' }}>
+            FinGuard
+          </Typography>
+        </Box>
+
+        <Typography variant="h2" fontWeight={800} sx={{ color: '#F0F6FF', mb: 2, lineHeight: 1.15, letterSpacing: '-0.03em' }}>
+          Personal Finance,<br />
+          <Box component="span" sx={{ background: 'linear-gradient(90deg, #2DD4BF, #6366F1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Professionally Managed
+          </Box>
+        </Typography>
+
+        <Typography variant="body1" sx={{ color: '#94A3B8', mb: 5, fontSize: '1.05rem', maxWidth: 420 }}>
+          Empower your users with intelligent financial tracking, real-time insights, and bank-grade security — all in one platform.
+        </Typography>
+
+        {FEATURES.map(({ icon, label }) => (
+          <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Box sx={{
+              width: 40, height: 40, borderRadius: 2,
+              background: 'linear-gradient(135deg, rgba(45,212,191,0.15), rgba(45,212,191,0.05))',
+              border: '1px solid rgba(45,212,191,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#2DD4BF',
+            }}>
+              {icon}
+            </Box>
+            <Typography sx={{ color: '#CBD5E1', fontWeight: 500 }}>{label}</Typography>
+          </Box>
+        ))}
+
+        <Box sx={{ display: 'flex', gap: 4, mt: 5 }}>
+          {[['10K+', 'Active Users'], ['99.9%', 'Uptime SLA'], ['256-bit', 'Encryption']].map(([val, lbl]) => (
+            <Box key={lbl}>
+              <Typography variant="h5" fontWeight={800} sx={{ color: '#2DD4BF' }}>{val}</Typography>
+              <Typography variant="caption" sx={{ color: '#64748B' }}>{lbl}</Typography>
+            </Box>
+          ))}
+        </Box>
+
+        <Box sx={{ mt: 4 }}>
+          <Link to="/about" style={{ color: '#2DD4BF', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
+            Learn more about FinGuard →
+          </Link>
+        </Box>
+      </Box>
+
+      {/* ── Right Login Card ────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          width: { xs: '100%', md: 480 },
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: { xs: 3, md: 5 },
+        }}
+      >
+        <Card
+          elevation={0}
+          sx={{
+            width: '100%',
+            maxWidth: 420,
+            background: 'rgba(13,27,42,0.85)',
+            border: `1px solid ${locked ? 'rgba(248,113,113,0.25)' : 'rgba(45,212,191,0.15)'}`,
+            backdropFilter: 'blur(24px)',
+            borderRadius: 4,
+            p: 1,
+            transition: 'border-color 0.3s',
+          }}
+        >
+          <CardContent sx={{ p: 4 }}>
+            {/* Mobile logo */}
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5, mb: 3 }}>
+              <Box component="img" src="/images/logo.png" alt="FinGuard" sx={{ width: 36, height: 36, objectFit: 'contain' }} />
+              <Typography variant="h6" fontWeight={700} sx={{ color: '#F0F6FF' }}>FinGuard</Typography>
+            </Box>
+
+            <Typography variant="h5" fontWeight={700} sx={{ color: '#F0F6FF', mb: 0.5 }}>
+              Admin Portal
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#64748B', mb: 3 }}>
+              Sign in to access the admin dashboard
+            </Typography>
+
+            {/* Info message (e.g. session expired) */}
+            {infoMsg && !error && (
+              <Alert
+                severity="info"
+                onClose={() => setInfoMsg('')}
+                sx={{ mb: 2.5, borderRadius: 2, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)' }}
+              >
+                {infoMsg}
+              </Alert>
+            )}
+
+            {/* Error message */}
+            {error && (
+              <Alert
+                severity="error"
+                id="loginErrorAlert"
+                sx={{ mb: 2.5, borderRadius: 2, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)' }}
+              >
+                {error}
+              </Alert>
+            )}
+
+            {/* Locked-out banner */}
+            {locked && (
+              <Box
+                sx={{
+                  mb: 3, p: 2.5, borderRadius: 3,
+                  background: 'rgba(248,113,113,0.08)',
+                  border: '1px solid rgba(248,113,113,0.25)',
+                  textAlign: 'center',
+                }}
+              >
+                <TimerOutlinedIcon sx={{ color: '#F87171', mb: 1, fontSize: 32 }} />
+                <Typography sx={{ color: '#F87171', fontWeight: 700, fontSize: '0.95rem' }}>
+                  Account Temporarily Locked
+                </Typography>
+                <Typography sx={{ color: '#94A3B8', fontSize: '0.82rem', mt: 0.5 }}>
+                  Try again in <strong style={{ color: '#FCA5A5' }}>{lockCountdown}</strong>
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={(lockRemaining / (15 * 60 * 1000)) * 100}
+                  sx={{
+                    mt: 2, borderRadius: 2, height: 4,
+                    background: 'rgba(255,255,255,0.05)',
+                    '& .MuiLinearProgress-bar': {
+                      background: 'linear-gradient(90deg,#F87171,#EF4444)',
+                      borderRadius: 2,
+                    },
+                  }}
+                />
+              </Box>
+            )}
+
+            <Box component="form" onSubmit={handleSubmit} noValidate autoComplete="off">
+              {/* Email */}
+              <TextField
+                fullWidth
+                label="Email Address"
+                name="email"
+                type="email"
+                id="loginEmailInput"
+                value={form.email}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                autoComplete="username"
+                required
+                disabled={locked || loading}
+                error={Boolean(emailError)}
+                helperText={emailError}
+                inputProps={{ maxLength: 320, 'aria-label': 'Email address' }}
+                sx={{ mb: emailError ? 1.5 : 2.5 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailOutlinedIcon sx={{ color: emailError ? '#F87171' : '#2DD4BF', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              {/* Password */}
+              <TextField
+                fullWidth
+                label="Password"
+                name="password"
+                id="loginPasswordInput"
+                type={showPwd ? 'text' : 'password'}
+                value={form.password}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                autoComplete="current-password"
+                required
+                disabled={locked || loading}
+                error={Boolean(passwordError)}
+                helperText={passwordError}
+                inputProps={{ maxLength: 512, 'aria-label': 'Password' }}
+                sx={{ mb: 3 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LockOutlinedIcon sx={{ color: passwordError ? '#F87171' : '#2DD4BF', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="toggle password visibility"
+                        onClick={() => setShowPwd((v) => !v)}
+                        edge="end"
+                        size="small"
+                        disabled={locked || loading}
+                        sx={{ color: '#64748B' }}
+                      >
+                        {showPwd ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                color="primary"
+                size="large"
+                disabled={loading || locked}
+                id="loginSubmitBtn"
+                sx={{ py: 1.6, fontSize: '1rem', position: 'relative' }}
+              >
+                {loading ? (
+                  <CircularProgress size={22} sx={{ color: '#0D1B2A' }} />
+                ) : locked ? (
+                  `Locked · ${lockCountdown}`
+                ) : (
+                  'Sign In to Dashboard'
+                )}
+              </Button>
+            </Box>
+
+            <Divider sx={{ my: 3, borderColor: 'rgba(45,212,191,0.1)', '&::before,&::after': { borderColor: 'rgba(45,212,191,0.1)' } }}>
+              <Typography variant="caption" sx={{ color: '#475569' }}>Security Info</Typography>
+            </Divider>
+
+            <Box sx={{
+              p: 2, borderRadius: 2,
+              background: 'rgba(45,212,191,0.05)',
+              border: '1px dashed rgba(45,212,191,0.2)',
+            }}>
+              <Typography variant="body2" sx={{ color: '#94A3B8', fontSize: '0.8rem', lineHeight: 1.6 }}>
+                🔒 This portal is restricted to <strong>administrators only</strong>. All sign-in attempts are logged.
+                After <strong>{MAX_LOGIN_ATTEMPTS} failed</strong> attempts the form is locked for 15 minutes.
+              </Typography>
+            </Box>
+
+            <Box sx={{ textAlign: 'center', mt: 3 }}>
+              <Link to="/about" style={{ color: '#64748B', textDecoration: 'none', fontSize: '0.82rem' }}>
+                Learn about FinGuard App →
+              </Link>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  );
+}
