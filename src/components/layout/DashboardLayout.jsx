@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, List, ListItemButton,
-  ListItemIcon, ListItemText, IconButton, Badge, Avatar, Tooltip,
+  ListItemIcon, ListItemText, IconButton, Avatar, Tooltip,
   Divider, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent,
   DialogContentText, DialogActions, Button, CircularProgress, Chip,
 } from '@mui/material';
@@ -11,12 +11,12 @@ import PeopleIcon from '@mui/icons-material/People';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SettingsIcon from '@mui/icons-material/Settings';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useAuth } from '../../App';
+import NotificationsPanel from './NotificationsPanel';
 
 const DRAWER_WIDTH = 260;
 
@@ -170,13 +170,7 @@ export default function DashboardLayout() {
               </IconButton>
             )}
             <Box sx={{ flex: 1 }} />
-            <Tooltip title="Notifications">
-              <IconButton sx={{ color: '#94A3B8', '&:hover': { color: '#2DD4BF' } }}>
-                <Badge badgeContent={3} color="error">
-                  <NotificationsIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
+            <NotificationsPanel />
             <Avatar sx={{ width: 34, height: 34, background: 'linear-gradient(135deg,#2DD4BF,#0D9488)', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
               {user?.name?.[0] || 'A'}
             </Avatar>

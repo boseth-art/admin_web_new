@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper: verify the requester is an authenticated admin ───────────
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ── Users collection ─────────────────────────────────────────────────
+    // A logged-in user may read their OWN document (needed for login role check).
+    // Only admins may read all users or write.
+    match /users/{userId} {
+      allow read:  if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ── Transactions ─────────────────────────────────────────────────────
+    // Mobile app users write their own transactions; admins read all.
+    match /transactions/{txnId} {
+      allow read:  if isAdmin();
+      allow create: if request.auth != null;   // mobile app can create
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────
+    // Mobile app writes notifications on user actions (register, transaction, etc.)
+    // Only the admin web panel can read and mark as read.
+    match /notifications/{docId} {
+      allow create: if request.auth != null;          // mobile app can write
+      allow read, update, delete: if isAdmin();       // only admin can read/clear
+    }
+
+    // ── Analytics / chart collections ────────────────────────────────────
+    match /monthlyRevenue/{docId}   { allow read, write: if isAdmin(); }
+    match /userDistribution/{docId} { allow read, write: if isAdmin(); }
+    match /categorySpending/{docId} { allow read, write: if isAdmin(); }
+    match /activityLog/{docId}      { allow read, write: if isAdmin(); }
+    match /userGrowth/{docId}       { allow read, write: if isAdmin(); }
+    match /quickMetrics/{docId}     { allow read, write: if isAdmin(); }
+
+    // ── Block everything else ─────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
