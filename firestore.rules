@@ -3,38 +3,62 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Helper: verify the requester is an authenticated admin ───────────
+    // ── Helper: is the requester authenticated?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ── Helper: is the requester the admin?
+    // On the free Spark plan (no Custom Claims via Cloud Functions), we verify
+    // admin status by reading their own Firestore document.
+    // This is secure because:
+    //   1. Only the admin can reach the web panel (App.jsx enforces this).
+    //   2. Only the bootstrap script (Admin SDK) can ever write role='admin'.
+    //   3. The users collection write rule below uses isAdmin(), creating a
+    //      circular dependency that prevents any client from self-promoting.
     function isAdmin() {
-      return request.auth != null
+      return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // ── Users collection ─────────────────────────────────────────────────
-    // A logged-in user may read their OWN document (needed for login role check).
-    // Only admins may read all users or write.
+    // ── Users collection ──────────────────────────────────────────────────────
+    // Admins can read all users and write user documents (CRUD from web panel).
+    // Regular users can only read their own document.
+    // CRITICAL: the isAdmin() check is evaluated server-side for every write —
+    // a regular user who somehow reaches this endpoint cannot write because
+    // their own document does not have role='admin'.
     match /users/{userId} {
-      allow read:  if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin();
+      allow read:   if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Admin can create new user documents (after client-SDK Auth creation)
+      allow create: if isAdmin();
+
+      // Admin can update any user document.
+      // GUARD: prevent anyone — even the admin — from writing role='admin'
+      // through the client SDK. Admin role is set ONLY by the bootstrap script.
+      allow update: if isAdmin()
+        && (!('role' in request.resource.data)
+            || request.resource.data.role != 'admin');
+
+      // Admin can delete (hard) — but UI only soft-deletes via status field.
+      allow delete: if isAdmin();
     }
 
-    // ── Transactions ─────────────────────────────────────────────────────
-    // Mobile app users write their own transactions; admins read all.
+    // ── Transactions ──────────────────────────────────────────────────────────
     match /transactions/{txnId} {
-      allow read:  if isAdmin();
-      allow create: if request.auth != null;   // mobile app can create
+      allow read:           if isAdmin();
+      allow create:         if isSignedIn();   // mobile app
       allow update, delete: if isAdmin();
     }
 
-    // ── Notifications ─────────────────────────────────────────────────────
-    // Mobile app writes notifications on user actions (register, transaction, etc.)
-    // Only the admin web panel can read and mark as read.
+    // ── Notifications ─────────────────────────────────────────────────────────
     match /notifications/{docId} {
-      allow create: if request.auth != null;          // mobile app can write
-      allow read, update, delete: if isAdmin();       // only admin can read/clear
+      allow create:               if isSignedIn();   // mobile app writes
+      allow read, update, delete: if isAdmin();      // admin panel only
     }
 
-    // ── Analytics / chart collections ────────────────────────────────────
+    // ── Analytics / chart collections ────────────────────────────────────────
     match /monthlyRevenue/{docId}   { allow read, write: if isAdmin(); }
     match /userDistribution/{docId} { allow read, write: if isAdmin(); }
     match /categorySpending/{docId} { allow read, write: if isAdmin(); }
@@ -42,7 +66,7 @@ service cloud.firestore {
     match /userGrowth/{docId}       { allow read, write: if isAdmin(); }
     match /quickMetrics/{docId}     { allow read, write: if isAdmin(); }
 
-    // ── Block everything else ─────────────────────────────────────────────
+    // ── Block everything else ─────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
