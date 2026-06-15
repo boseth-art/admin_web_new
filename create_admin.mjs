@@ -15,7 +15,9 @@
  * IMPORTANT: Never commit service-account.json to Git.
  */
 
-import admin from 'firebase-admin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -30,12 +32,12 @@ try {
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+const app = initializeApp({
+  credential: cert(serviceAccount),
 });
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = getFirestore(app);
+const auth = getAuth(app);
 
 // ── CLI args ─────────────────────────────────────────────────────────────────
 const email    = process.argv[2] || 'admin@finguard.com';
@@ -83,7 +85,7 @@ try {
       transactions: 0,
       phone:        '',
       joined:       new Date().toISOString().split('T')[0],
-      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      createdAt:    FieldValue.serverTimestamp(),
     },
     { merge: true }
   );

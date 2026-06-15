@@ -29,7 +29,8 @@ service cloud.firestore {
     // a regular user who somehow reaches this endpoint cannot write because
     // their own document does not have role='admin'.
     match /users/{userId} {
-      allow read:   if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow get:    if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list:   if isAdmin();
 
       // Admin can create new user documents (after client-SDK Auth creation)
       allow create: if isAdmin();

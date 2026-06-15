@@ -1,0 +1,35 @@
+Processed,Method,URI,Flags
+true,GET,https://smart-financial-management.web.app/about,Seed
+true,GET,https://smart-financial-management.web.app/robots.txt,Seed
+true,GET,https://smart-financial-management.web.app/sitemap.xml,Seed
+true,GET,https://smart-financial-management.web.app/images/logo.png,
+false,GET,https://fonts.googleapis.com/,Out of Scope
+false,GET,https://fonts.gstatic.com/,Out of Scope
+false,GET,https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@300;400;500;600;700;800,Out of Scope
+true,GET,https://smart-financial-management.web.app/assets/index-BgxoBsov.js,
+false,GET,https://react.dev/errors/%60+e;if,Out of Scope
+false,GET,"http://www.w3.org/2000/svg%60,a",Out of Scope
+false,GET,"http://www.w3.org/1998/Math/MathML%60,a",Out of Scope
+false,GET,http://www.w3.org/2000/svg%60%7C%7Co.hasAttribute,Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:href%60,n",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:actuate%60,r",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:arcrole%60,r",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:role%60,r",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:show%60,r",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:title%60,r",Out of Scope
+false,GET,"http://www.w3.org/1999/xlink%60,%60xlink:type%60,r",Out of Scope
+false,GET,"http://www.w3.org/XML/1998/namespace%60,%60xml:base%60,r",Out of Scope
+false,GET,"http://www.w3.org/XML/1998/namespace%60,%60xml:lang%60,r",Out of Scope
+false,GET,"http://www.w3.org/XML/1998/namespace%60,%60xml:space%60,r",Out of Scope
+false,GET,http://www.w3.org/2000/svg%60:return,Out of Scope
+false,GET,http://www.w3.org/1998/Math/MathML%60:return,Out of Scope
+false,GET,http://www.w3.org/2000/svg%60,Out of Scope
+false,GET,https://reactrouter.com/en/main/routers/picking-a-router.%60,Out of Scope
+false,GET,https://mui.com/production-error/?code=$,Out of Scope
+false,GET,https://mui.com/system/display/,Out of Scope
+false,GET,https://securetoken.google.com/$,Out of Scope
+false,GET,"https://apis.google.com/js/api.js%60,recaptchaV2Script:%60https:/www.google.com/recaptcha/api.js%60,recaptchaEnterpriseScript:%60https:/www.google.com/recaptcha/enterprise.js?render=%60",Out of Scope
+false,GET,https://redux.js.org/Errors?code=$,Out of Scope
+false,GET,https://bit.ly/3cXEKWf%60,Out of Scope
+false,GET,https://redux-toolkit.js.org/Errors?code=$,Out of Scope
+false,GET,"http://www.w3.org/1999/xhtml%60,tabIndex:-1,className:i,style:o,ref:e.innerRef",Out of Scope
