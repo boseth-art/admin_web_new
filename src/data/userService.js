@@ -30,10 +30,10 @@ import { auth, db } from './firebase';
 // ── Role / Status metadata (shared with UI components) ───────────────────────
 
 export const ROLES = [
-  { value: 'student',        label: 'Student',              color: '#38BDF8', bg: 'rgba(56,189,248,0.1)',  border: 'rgba(56,189,248,0.2)'  },
-  { value: 'business_owner', label: 'Business Owner',       color: '#FBBF24', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.2)'  },
-  { value: 'company_owner',  label: 'Company Owner',        color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)' },
-  { value: 'multi_account',  label: 'Multi Account Holder', color: '#FB923C', bg: 'rgba(251,146,60,0.1)',  border: 'rgba(251,146,60,0.2)'  },
+  { value: 'Student',                 label: 'Student',              color: '#38BDF8', bg: 'rgba(56,189,248,0.1)',  border: 'rgba(56,189,248,0.2)'  },
+  { value: 'Business owner',          label: 'Business Owner',       color: '#FBBF24', bg: 'rgba(251,191,36,0.1)',  border: 'rgba(251,191,36,0.2)'  },
+  { value: 'Company worker',          label: 'Company Worker',       color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', border: 'rgba(167,139,250,0.2)' },
+  { value: 'Multiple account holder', label: 'Multi Account Holder', color: '#FB923C', bg: 'rgba(251,146,60,0.1)',  border: 'rgba(251,146,60,0.2)'  },
 ];
 
 export const STATUSES = [
@@ -48,6 +48,11 @@ const ADMIN_ROLE_META = { value: 'admin', label: 'Admin', color: '#F87171', bg: 
 
 export const getRoleMeta = (value) => {
   if (value === 'admin') return ADMIN_ROLE_META;
+  const val = String(value || '').toLowerCase();
+  if (val === 'student') return ROLES[0];
+  if (val === 'business owner' || val === 'business_owner') return ROLES[1];
+  if (val === 'company worker' || val === 'company owner' || val === 'company_owner') return ROLES[2];
+  if (val === 'multiple account holder' || val === 'multi_account') return ROLES[3];
   return ROLES.find(r => r.value === value) || ROLES[0];
 };
 export const getStatusMeta = (value) => STATUSES.find(s => s.value === value) || STATUSES[0];
@@ -98,12 +103,14 @@ export async function createUser({ email, password, displayName, role, phone = '
     try { await deleteApp(secondaryApp); } catch (_) {}
   }
 
-  // Write the Firestore profile (admin is still signed in on the primary app)
+  // Write the unified Firestore profile matching both web and mobile schemas
   await setDoc(doc(db, 'users', newUid), {
     uid:          newUid,
     email,
     name:         displayName,
+    fullName:     displayName, // For mobile app compatibility
     phone:        phone || '',
+    mobile:       phone || '', // For mobile app compatibility
     role,
     plan:         'Free',
     status:       'active',
@@ -112,7 +119,52 @@ export async function createUser({ email, password, displayName, role, phone = '
     joined:       new Date().toISOString().split('T')[0],
     createdAt:    serverTimestamp(),
     createdBy:    auth.currentUser?.uid || 'admin',
+    // Mobile app default fields to prevent crashes
+    age:          "",
+    hasLoan:      false,
+    hasSavingPlan: false,
+    loanAmount:   "",
+    currentSavings: "",
+    checkEmail:   false,
+    checkSms:     false,
+    checkPush:    false,
+    checkReport:  false,
+    checkPromo:   false,
   });
+
+  // Setup Role-Specific Profiles via Subcollections (Pattern 1)
+  let subcollectionName = '';
+  const roleSpecificProfile = {};
+
+  switch (role) {
+    case 'Student':
+      subcollectionName = 'student_profile';
+      roleSpecificProfile.university = '';
+      roleSpecificProfile.course = '';
+      roleSpecificProfile.studentId = '';
+      break;
+    case 'Company worker':
+      subcollectionName = 'worker_profile';
+      roleSpecificProfile.companyName = '';
+      roleSpecificProfile.designation = '';
+      roleSpecificProfile.monthlySalary = 0.0;
+      break;
+    case 'Business owner':
+      subcollectionName = 'business_profile';
+      roleSpecificProfile.businessName = '';
+      roleSpecificProfile.regNumber = '';
+      roleSpecificProfile.industryType = '';
+      break;
+    case 'Multiple account holder':
+      subcollectionName = 'multi_profile';
+      roleSpecificProfile.linkedAccountsCount = 1;
+      roleSpecificProfile.primaryWorkspace = '';
+      break;
+  }
+
+  if (subcollectionName) {
+    await setDoc(doc(db, 'users', newUid, subcollectionName, 'profile_data'), roleSpecificProfile);
+  }
 
   return { uid: newUid };
 }

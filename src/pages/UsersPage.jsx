@@ -41,7 +41,7 @@ const fieldSx = {
 };
 
 // ── Initial form state ───────────────────────────────────────────────────────
-const EMPTY_FORM = { displayName: '', email: '', password: '', role: 'student', phone: '', status: 'active' };
+const EMPTY_FORM = { displayName: '', email: '', password: '', role: 'Student', phone: '', status: 'active' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Create / Edit Dialog
@@ -336,10 +336,10 @@ export default function UsersPage() {
           const d = doc.data();
           return {
             id:           doc.id,
-            name:         d.name         || 'Anonymous User',
+            name:         d.name         || d.fullName || 'Anonymous User',
             email:        d.email        || '',
-            phone:        d.phone        || '',
-            role:         d.role         || 'student',
+            phone:        d.phone        || d.mobile   || '',
+            role:         d.role         || 'Student',
             plan:         d.plan         || 'Free',
             balance:      typeof d.balance      === 'number' ? d.balance      : Number(d.balance      || 0),
             transactions: typeof d.transactions === 'number' ? d.transactions : Number(d.transactions || 0),
