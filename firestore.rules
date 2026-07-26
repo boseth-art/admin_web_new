@@ -55,8 +55,34 @@ service cloud.firestore {
 
     // ── Notifications ─────────────────────────────────────────────────────────
     match /notifications/{docId} {
-      allow create:               if isSignedIn();   // mobile app writes
-      allow read, update, delete: if isAdmin();      // admin panel only
+      // Unauthenticated users (About page form) or signed-in users can create complaints.
+      allow create: if isSignedIn() || (
+        request.resource.data.type == 'complaint' &&
+        request.resource.data.read == false &&
+        request.resource.data.keys().hasAll(['title', 'body', 'type', 'read', 'email', 'createdAt'])
+      );
+
+      // get = single document read by ID — admin OR owner of a targeted message
+      allow get: if isAdmin()
+        || (isSignedIn()
+            && resource.data.isUserTargeted == true
+            && resource.data.uid == request.auth.uid);
+
+      // list = query — admin sees everything; mobile app must query with
+      //   .where('uid', isEqualTo: currentUid)
+      //   .where('isUserTargeted', isEqualTo: true)
+      //   The resource.data checks below enforce this at the document level.
+      allow list: if isAdmin()
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && resource.data.isUserTargeted == true);
+
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.uid == request.auth.uid
+            && request.auth.uid == request.resource.data.uid
+            && request.resource.data.isUserTargeted == true);
+      allow delete: if isAdmin();
     }
 
     // ── Analytics / chart collections ────────────────────────────────────────

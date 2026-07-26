@@ -50,13 +50,14 @@ exports.onNewUserRegistered = functions.auth.user().onCreate(async (user) => {
     );
 
     await db.collection('notifications').add({
-      title:     'New user registered',
-      body:      `${displayName || email || 'A new user'} just created an account.`,
-      type:      'user',
-      read:      false,
+      title:         'New user registered',
+      body:          `${displayName || email || 'A new user'} just created an account.`,
+      type:          'user',
+      read:          false,
       uid,
-      email:     email || '',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      email:         email || '',
+      isUserTargeted: true,
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
     });
 
     console.log(`[FinGuard] New user registered: ${email}`);
@@ -114,13 +115,14 @@ exports.onUserDeleted = functions.auth.user().onDelete(async (user) => {
     );
 
     await db.collection('notifications').add({
-      title:     'User account deleted',
-      body:      `${displayName || email || 'A user'} deleted their account.`,
-      type:      'alert',
-      read:      false,
+      title:         'User account deleted',
+      body:          `${displayName || email || 'A user'} deleted their account.`,
+      type:          'alert',
+      read:          false,
       uid,
-      email:     email || '',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      email:         email || '',
+      isUserTargeted: true,
+      createdAt:     admin.firestore.FieldValue.serverTimestamp(),
     });
 
     console.log(`[FinGuard] User deleted: ${email}`);
@@ -140,18 +142,68 @@ exports.createAdminNotification = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError('permission-denied', 'Only admins can create notifications.');
   }
 
-  const { title, body, type = 'system' } = data;
+  const { title, body, type = 'system', uid, email } = data;
   if (!title || !body) throw new functions.https.HttpsError('invalid-argument', 'title and body are required.');
+  if (title.length > 200) throw new functions.https.HttpsError('invalid-argument', 'Title must be 200 characters or fewer.');
+  if (body.length > 2000) throw new functions.https.HttpsError('invalid-argument', 'Body must be 2000 characters or fewer.');
 
-  await db.collection('notifications').add({
+  const notification = {
     title,
     body,
     type,
     read:      false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+
+  // If targeting a specific user, add the fields the mobile app queries on
+  if (uid) {
+    notification.uid = uid;
+    notification.isUserTargeted = true;
+  }
+  if (email) {
+    notification.email = email;
+  }
+
+  await db.collection('notifications').add(notification);
 
   return { success: true };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC ENDPOINT: Submit Complaint
+// Allows anyone (guests) to submit a complaint via the website form.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.submitComplaint = functions.https.onCall(async (data, context) => {
+  const { email, message } = data;
+  if (!email || !message) {
+    throw new functions.https.HttpsError('invalid-argument', 'email and message are required.');
+  }
+  
+  // Basic email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid email format.');
+  }
+  
+  if (message.length > 2000) {
+    throw new functions.https.HttpsError('invalid-argument', 'Message is too long (max 2000 characters).');
+  }
+
+  try {
+    await db.collection('notifications').add({
+      title:     'New Complaint from User',
+      body:      message,
+      type:      'complaint',
+      read:      false,
+      email:     email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[FinGuard] New complaint received from: ${email}`);
+    return { success: true };
+  } catch (err) {
+    console.error('[FinGuard] submitComplaint error:', err);
+    throw new functions.https.HttpsError('internal', 'Failed to submit complaint.');
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,4 +371,144 @@ exports.adminDeleteUser = functions.https.onCall(async (data, context) => {
     }
     throw new functions.https.HttpsError('internal', error.message);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: Resolve a user UID from an email address.
+// Queries the `users` Firestore collection for a document with matching email.
+// Returns the uid string, or null if not found (e.g. guest complaint).
+// ─────────────────────────────────────────────────────────────────────────────
+const resolveUidByEmail = async (email) => {
+  if (!email) return null;
+  const snap = await db.collection('users')
+    .where('email', '==', email.toLowerCase().trim())
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return snap.docs[0].id; // document ID is the uid
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN SUPPORT 1: Send Acknowledgement (1-click auto-reply)
+// Admin calls this after seeing a complaint notification.
+// Looks up the user UID by email, writes a pre-written reply notification
+// targeted at that user, and marks the complaint as "replied".
+// ─────────────────────────────────────────────────────────────────────────────
+exports.adminSendAcknowledgement = functions.https.onCall(async (data, context) => {
+  verifyAdmin(context);
+
+  const { complaintId, email } = data;
+
+  if (!complaintId || !email) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'complaintId and email are required.'
+    );
+  }
+
+  // 1. Verify the complaint document exists
+  const complaintRef = db.collection('notifications').doc(complaintId);
+  const complaintSnap = await complaintRef.get();
+  if (!complaintSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Complaint not found.');
+  }
+  const complaintData = complaintSnap.data();
+
+  // 2. Guard: already replied?
+  if (complaintData.replied === true) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'This complaint has already been replied to.'
+    );
+  }
+
+  // 3. Resolve UID from email — queries users collection by email field
+  const targetUid = await resolveUidByEmail(email);
+
+  // 4. Write the automated acknowledgement notification targeted at the user
+  const replyBody =
+    'Thank you for reaching out to us. We have received your message and our team ' +
+    'is currently reviewing your concern. We will get back to you as soon as possible. ' +
+    '– FinGuard Support Team';
+
+  await db.collection('notifications').add({
+    title:              "✅ Support: We've received your message",
+    body:               replyBody,
+    type:               'admin_reply',
+    read:               false,
+    uid:                targetUid || null,
+    email:              email,
+    isUserTargeted:     true,
+    replyToComplaintId: complaintId,
+    sentBy:             context.auth.uid,
+    createdAt:          admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // 5. Mark original complaint as replied
+  await complaintRef.update({
+    replied:   true,
+    repliedAt: admin.firestore.FieldValue.serverTimestamp(),
+    repliedBy: context.auth.uid,
+  });
+
+  console.log(`[FinGuard] adminSendAcknowledgement: replied to ${complaintId} for ${email}`);
+  return { success: true, resolvedUid: targetUid };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN SUPPORT 2: Send Detailed Reply (custom message from admin)
+// Admin writes a custom subject + body in the ReplyDialog and sends it.
+// Same email→UID lookup strategy as above.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.adminSendDetailedReply = functions.https.onCall(async (data, context) => {
+  verifyAdmin(context);
+
+  const { complaintId, email, subject, message } = data;
+
+  if (!complaintId || !email || !message) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'complaintId, email, and message are required.'
+    );
+  }
+  if (message.length > 2000) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Message is too long (max 2000 characters).'
+    );
+  }
+
+  // 1. Verify the complaint document exists
+  const complaintRef = db.collection('notifications').doc(complaintId);
+  const complaintSnap = await complaintRef.get();
+  if (!complaintSnap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Complaint not found.');
+  }
+
+  // 2. Resolve UID from email
+  const targetUid = await resolveUidByEmail(email);
+
+  // 3. Write the custom reply notification targeted at the user
+  await db.collection('notifications').add({
+    title:              subject || 'Message from FinGuard Support',
+    body:               message,
+    type:               'admin_reply',
+    read:               false,
+    uid:                targetUid || null,
+    email:              email,
+    isUserTargeted:     true,
+    replyToComplaintId: complaintId,
+    sentBy:             context.auth.uid,
+    createdAt:          admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // 4. Mark original complaint as replied (idempotent — already replied is fine here)
+  await complaintRef.update({
+    replied:   true,
+    repliedAt: admin.firestore.FieldValue.serverTimestamp(),
+    repliedBy: context.auth.uid,
+  });
+
+  console.log(`[FinGuard] adminSendDetailedReply: replied to ${complaintId} for ${email}`);
+  return { success: true, resolvedUid: targetUid };
 });

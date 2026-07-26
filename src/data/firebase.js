@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 
 // All values are loaded from environment variables (.env file).
 // Never hardcode credentials here — the .env file is excluded from Git.
@@ -25,4 +26,5 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
+export const functionsInstance = getFunctions(app);
 export default app;

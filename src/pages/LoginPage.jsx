@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
   InputAdornment, IconButton, Alert, Divider, CircularProgress,
-  LinearProgress,
+  LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -14,11 +14,12 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { useAuth } from '../App';
 import { auth, db } from '../data/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import {
   sanitiseInput,
   validateEmail,
@@ -28,6 +29,7 @@ import {
   clearLockout,
   formatLockoutRemaining,
   MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_DURATION_MS,
 } from '../security/authSecurity';
 
 // ─── Decorative background orb ───────────────────────────────────────────────
@@ -52,6 +54,12 @@ const FEATURES = [
   { icon: <AutoAwesomeIcon />,   label: 'AI-Powered Financial Insights'    },
 ];
 
+const QUOTES = [
+  { text: "A budget is telling your money where to go instead of wondering where it went.", author: "Dave Ramsey" },
+  { text: "Money grows on the tree of persistence.", author: "Japanese Proverb" },
+  { text: "The habit of saving is itself an education.", author: "Thornton T. Munger" }
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();
@@ -70,6 +78,13 @@ export default function LoginPage() {
   const [locked, setLocked]         = useState(false);
   const [lockRemaining, setLockRemaining] = useState(0);
 
+  // ── Complaint Modal state ────────────────────────────────────────────────
+  const [complaintOpen, setComplaintOpen] = useState(false);
+  const [complaintEmail, setComplaintEmail] = useState('');
+  const [complaintMessage, setComplaintMessage] = useState('');
+  const [complaintStatus, setComplaintStatus] = useState('idle');
+  const [complaintError, setComplaintError] = useState('');
+
   // ── Derive inline validation errors ────────────────────────────────────
   const emailError    = touched.email    ? validateEmail(form.email).message    : '';
   const passwordError = touched.password ? validatePassword(form.password).message : '';
@@ -87,6 +102,15 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && !authLoading) navigate('/dashboard', { replace: true });
   }, [user, authLoading, navigate]);
+
+  // ── Rotating Quote ──────────────────────────────────────────────────────
+  const [quoteIndex, setQuoteIndex] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQuoteIndex((prev) => (prev + 1) % QUOTES.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Lockout ticker ──────────────────────────────────────────────────────
   const refreshLockout = useCallback(() => {
@@ -209,6 +233,35 @@ export default function LoginPage() {
     }
   };
 
+  // ── Complaint Submit ─────────────────────────────────────────────────────
+  const handleSubmitComplaint = async (e) => {
+    e.preventDefault();
+    if (!complaintEmail || !complaintMessage) return;
+    setComplaintStatus('loading');
+    setComplaintError('');
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        title: 'New Complaint from User',
+        body: complaintMessage,
+        type: 'complaint',
+        read: false,
+        email: complaintEmail,
+        createdAt: serverTimestamp()
+      });
+      setComplaintStatus('success');
+      setComplaintEmail('');
+      setComplaintMessage('');
+      setTimeout(() => {
+        setComplaintOpen(false);
+        setComplaintStatus('idle');
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      setComplaintStatus('error');
+      setComplaintError(err.message || 'Failed to submit complaint.');
+    }
+  };
+
   // ── Lockout countdown string ─────────────────────────────────────────────
   const lockCountdown = formatLockoutRemaining(lockRemaining);
 
@@ -250,12 +303,18 @@ export default function LoginPage() {
           </Typography>
         </Box>
 
-        <Typography variant="h2" fontWeight={800} sx={{ color: '#F0F6FF', mb: 2, lineHeight: 1.15, letterSpacing: '-0.03em' }}>
-          Personal Finance,<br />
-          <Box component="span" sx={{ background: 'linear-gradient(90deg, #2DD4BF, #6366F1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Professionally Managed
-          </Box>
-        </Typography>
+        <motion.div
+          initial={{ opacity: 0, x: -30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <Typography variant="h2" fontWeight={800} sx={{ color: '#F0F6FF', mb: 2, lineHeight: 1.15, letterSpacing: '-0.03em' }}>
+            Personal Finance,<br />
+            <Box component="span" sx={{ background: 'linear-gradient(90deg, #2DD4BF, #6366F1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              Professionally Managed
+            </Box>
+          </Typography>
+        </motion.div>
 
         <Typography variant="body1" sx={{ color: '#94A3B8', mb: 5, fontSize: '1.05rem', maxWidth: 420 }}>
           Empower your users with intelligent financial tracking, real-time insights, and bank-grade security — all in one platform.
@@ -285,7 +344,28 @@ export default function LoginPage() {
           ))}
         </Box>
 
-        <Box sx={{ mt: 4 }}>
+        {/* Animated Quotes Carousel */}
+        <Box sx={{ mt: 6, minHeight: 100, position: 'relative' }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={quoteIndex}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.5 }}
+              style={{ position: 'absolute' }}
+            >
+              <Typography variant="body1" sx={{ color: '#CBD5E1', fontStyle: 'italic', mb: 1 }}>
+                "{QUOTES[quoteIndex].text}"
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#2DD4BF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
+                — {QUOTES[quoteIndex].author}
+              </Typography>
+            </motion.div>
+          </AnimatePresence>
+        </Box>
+
+        <Box sx={{ mt: 8 }}>
           <Link to="/about" style={{ color: '#2DD4BF', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
             Learn more about FinGuard →
           </Link>
@@ -302,20 +382,25 @@ export default function LoginPage() {
           p: { xs: 3, md: 5 },
         }}
       >
-        <Card
-          elevation={0}
-          sx={{
-            width: '100%',
-            maxWidth: 420,
-            background: 'rgba(13,27,42,0.85)',
-            border: `1px solid ${locked ? 'rgba(248,113,113,0.25)' : 'rgba(45,212,191,0.15)'}`,
-            backdropFilter: 'blur(24px)',
-            borderRadius: 4,
-            p: 1,
-            transition: 'border-color 0.3s',
-          }}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          style={{ width: '100%', maxWidth: 420 }}
         >
-          <CardContent sx={{ p: 4 }}>
+          <Card
+            elevation={0}
+            sx={{
+              width: '100%',
+              background: 'rgba(13,27,42,0.85)',
+              border: `1px solid ${locked ? 'rgba(248,113,113,0.25)' : 'rgba(45,212,191,0.15)'}`,
+              backdropFilter: 'blur(24px)',
+              borderRadius: 4,
+              p: 1,
+              transition: 'border-color 0.3s',
+            }}
+          >
+            <CardContent sx={{ p: 4 }}>
             {/* Mobile logo */}
             <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5, mb: 3 }}>
               <Box component="img" src="/images/logo.png" alt="FinGuard" sx={{ width: 36, height: 36, objectFit: 'contain' }} />
@@ -485,14 +570,114 @@ export default function LoginPage() {
               </Typography>
             </Box>
 
-            <Box sx={{ textAlign: 'center', mt: 3 }}>
+            <Box sx={{ textAlign: 'center', mt: 3, display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Link to="/about" style={{ color: '#64748B', textDecoration: 'none', fontSize: '0.82rem' }}>
                 Learn about FinGuard App →
               </Link>
+              <Typography 
+                onClick={() => setComplaintOpen(true)}
+                sx={{ color: '#F472B6', cursor: 'pointer', fontSize: '0.82rem', '&:hover': { textDecoration: 'underline' } }}
+              >
+                File a Complaint to Admin
+              </Typography>
             </Box>
           </CardContent>
         </Card>
+        </motion.div>
       </Box>
+
+      {/* ── Complaint Modal ────────────────────────────────────────────── */}
+      <Dialog 
+        open={complaintOpen} 
+        onClose={() => {
+          if (complaintStatus !== 'loading') setComplaintOpen(false);
+        }}
+        PaperProps={{
+          sx: {
+            background: 'rgba(13,27,42,0.95)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(244,114,182,0.2)',
+            borderRadius: 3,
+            minWidth: { xs: '90vw', sm: 400 }
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: '#F0F6FF', fontWeight: 700, pb: 1 }}>
+          File a Complaint
+        </DialogTitle>
+        <DialogContent sx={{ pb: 1 }}>
+          <Typography sx={{ color: '#94A3B8', fontSize: '0.85rem', mb: 3 }}>
+            Send a direct message to the administration. We take your concerns seriously.
+          </Typography>
+          
+          {complaintStatus === 'success' && (
+            <Alert severity="success" sx={{ mb: 3, background: 'rgba(52,211,153,0.1)', color: '#34D399', '& .MuiAlert-icon': { color: '#34D399' } }}>
+              Your message has been sent successfully.
+            </Alert>
+          )}
+
+          {complaintStatus === 'error' && (
+            <Alert severity="error" sx={{ mb: 3, background: 'rgba(248,113,113,0.1)', color: '#F87171', '& .MuiAlert-icon': { color: '#F87171' } }}>
+              {complaintError}
+            </Alert>
+          )}
+
+          <Box component="form" id="complaint-form" onSubmit={handleSubmitComplaint} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            <TextField
+              label="Your Email Address"
+              type="email"
+              variant="outlined"
+              fullWidth
+              required
+              value={complaintEmail}
+              onChange={(e) => setComplaintEmail(e.target.value)}
+              disabled={complaintStatus === 'loading' || complaintStatus === 'success'}
+              sx={{
+                '& .MuiOutlinedInput-root': { color: '#F0F6FF', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover fieldset': { borderColor: '#F472B6' }, '&.Mui-focused fieldset': { borderColor: '#F472B6' } },
+                '& .MuiInputLabel-root': { color: '#94A3B8', '&.Mui-focused': { color: '#F472B6' } }
+              }}
+            />
+            <TextField
+              label="Your Message or Complaint"
+              multiline
+              rows={4}
+              variant="outlined"
+              fullWidth
+              required
+              value={complaintMessage}
+              onChange={(e) => setComplaintMessage(e.target.value)}
+              disabled={complaintStatus === 'loading' || complaintStatus === 'success'}
+              sx={{
+                '& .MuiOutlinedInput-root': { color: '#F0F6FF', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover fieldset': { borderColor: '#F472B6' }, '&.Mui-focused fieldset': { borderColor: '#F472B6' } },
+                '& .MuiInputLabel-root': { color: '#94A3B8', '&.Mui-focused': { color: '#F472B6' } }
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button 
+            onClick={() => setComplaintOpen(false)} 
+            disabled={complaintStatus === 'loading'}
+            sx={{ color: '#94A3B8' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            form="complaint-form"
+            variant="contained" 
+            disabled={complaintStatus === 'loading' || complaintStatus === 'success'}
+            sx={{
+              background: 'linear-gradient(135deg,#F472B6,#BE185D)',
+              color: '#FFF',
+              fontWeight: 700,
+              '&:hover': { background: 'linear-gradient(135deg,#BE185D,#9D174D)' }
+            }}
+          >
+            {complaintStatus === 'loading' ? <CircularProgress size={20} color="inherit" /> : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -192,8 +192,20 @@ export async function updateUser({ uid, displayName, email, role, status, phone 
   if (displayName !== undefined) update.name   = displayName;
   if (email       !== undefined) update.email  = email;
   if (role        !== undefined) update.role   = role;
-  if (status      !== undefined) update.status = status;
   if (phone       !== undefined) update.phone  = phone;
+
+  if (status !== undefined) {
+    update.status = status;
+    // When suspending: record the exact timestamp so the mobile app can
+    // enforce the 30-day auto-deactivation rule (suspended → deactivated).
+    if (status === 'suspended') {
+      update.suspendedAt = serverTimestamp();
+    }
+    // When un-suspending (back to active/inactive): clear the suspendedAt field
+    if (status === 'active' || status === 'inactive') {
+      update.suspendedAt = null;
+    }
+  }
 
   await updateDoc(doc(db, 'users', uid), update);
 }

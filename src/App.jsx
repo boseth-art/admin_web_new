@@ -14,6 +14,7 @@ import TransactionsPage from './pages/TransactionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
+import LandingPage from './pages/LandingPage';
 import SessionTimeoutModal from './components/layout/SessionTimeoutModal';
 
 import { auth, db } from './data/firebase';
@@ -232,22 +233,21 @@ export default function App() {
         <BrowserRouter>
           <NavigateBridge />
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route
-              path="/"
               element={
                 <ProtectedRoute>
                   <DashboardLayout />
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard"    element={<DashboardPage />} />
-              <Route path="users"        element={<UsersPage />} />
-              <Route path="transactions" element={<TransactionsPage />} />
-              <Route path="analytics"    element={<AnalyticsPage />} />
-              <Route path="settings"     element={<SettingsPage />} />
+              <Route path="/dashboard"    element={<DashboardPage />} />
+              <Route path="/users"        element={<UsersPage />} />
+              <Route path="/transactions" element={<TransactionsPage />} />
+              <Route path="/analytics"    element={<AnalyticsPage />} />
+              <Route path="/settings"     element={<SettingsPage />} />
             </Route>
             {/* Catch-all → login */}
             <Route path="*" element={<Navigate to="/login" replace />} />
