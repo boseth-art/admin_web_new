@@ -19,6 +19,14 @@ import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import TuneIcon from '@mui/icons-material/Tune';
+import SecurityIcon from '@mui/icons-material/Security';
+import StorageIcon from '@mui/icons-material/Storage';
+import GroupWorkIcon from '@mui/icons-material/GroupWork';
+import LockPersonIcon from '@mui/icons-material/LockPerson';
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import GavelIcon from '@mui/icons-material/Gavel';
 import { useAuth } from '../../App';
 import NotificationsPanel from './NotificationsPanel';
 import { db } from '../../data/firebase';
@@ -45,8 +53,16 @@ const navItems = [
 
 // Super admin exclusive nav items
 const superAdminNavItems = [
-  { label: 'Control Panel',    icon: <TuneIcon />,                  path: '/super-admin' },
-  { label: 'Admin Management', icon: <SupervisorAccountIcon />,      path: '/super-admin/admins' },
+  { label: 'Control Panel',      icon: <TuneIcon />,                  path: '/super-admin' },
+  { label: 'Admin Management',   icon: <SupervisorAccountIcon />,      path: '/super-admin/admins' },
+  { label: 'Security Center',    icon: <SecurityIcon />,               path: '/super-admin/security' },
+  { label: 'Database Inspector', icon: <StorageIcon />,                path: '/super-admin/database' },
+  { label: 'Bulk Operations',    icon: <GroupWorkIcon />,              path: '/super-admin/bulk' },
+  { label: 'Permissions',        icon: <LockPersonIcon />,             path: '/super-admin/permissions' },
+  { label: 'System Health',      icon: <MonitorHeartIcon />,           path: '/super-admin/health' },
+  { label: 'App Config',         icon: <PhoneAndroidIcon />,           path: '/super-admin/config' },
+  { label: 'Impersonate User',   icon: <ManageAccountsIcon />,         path: '/super-admin/impersonate' },
+  { label: 'Compliance',         icon: <GavelIcon />,                  path: '/super-admin/compliance' },
 ];
 
 export default function DashboardLayout() {

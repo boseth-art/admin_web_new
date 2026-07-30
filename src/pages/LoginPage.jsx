@@ -109,9 +109,12 @@ export default function LoginPage() {
     if (reason === 'expired') setInfoMsg('Your session has expired. Please sign in again.');
   }, [location.search]);
 
-  // ── Auto-redirect if already signed in as admin ─────────────────────────
+  // ── Auto-redirect if already signed in as admin/superadmin ─────────────────
   useEffect(() => {
-    if (user && !authLoading) navigate('/dashboard', { replace: true });
+    if (user && !authLoading) {
+      const dest = user.role === 'superadmin' ? '/super-admin' : '/dashboard';
+      navigate(dest, { replace: true });
+    }
   }, [user, authLoading, navigate]);
 
   // ── Rotating Quote ──────────────────────────────────────────────────────
@@ -193,10 +196,11 @@ export default function LoginPage() {
       const userDocRef = doc(db, 'users', firebaseUser.uid);
       const userDoc    = await getDoc(userDocRef);
 
-      if (userDoc.exists() && userDoc.data().role === 'admin') {
-        // Success — clear brute-force counter and proceed
+      if (userDoc.exists() && ['admin', 'superadmin'].includes(userDoc.data().role)) {
+        // Success — clear brute-force counter and redirect based on role
         clearLockout();
-        navigate('/dashboard', { replace: true });
+        const dest = userDoc.data().role === 'superadmin' ? '/super-admin' : '/dashboard';
+        navigate(dest, { replace: true });
       } else {
         // Not an admin — revoke Firebase session immediately
         await signOut(auth);

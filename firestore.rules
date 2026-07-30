@@ -116,9 +116,39 @@ service cloud.firestore {
     match /invoices/{docId}    { allow read, write: if isSignedIn(); }
     match /utilityBill/{docId} { allow read, write: if isSignedIn(); }
 
+    // ── Super Admin — Security Log ────────────────────────────────────────────
+    // Admin+ can write security events; only superadmin can read full log
+    match /securityLog/{docId} {
+      allow read:  if isSuperAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Super Admin — Active Sessions ─────────────────────────────────────────
+    // Each admin writes their own session; only superadmin can list all
+    match /activeSessions/{uid} {
+      allow read:   if isSuperAdmin() || request.auth.uid == uid;
+      allow write:  if isAdmin() && request.auth.uid == uid;
+      allow delete: if isSuperAdmin() || request.auth.uid == uid;
+    }
+
+    // ── Super Admin — Admin Permissions ───────────────────────────────────────
+    // Admins can read their own permissions; only superadmin can write
+    match /adminPermissions/{uid} {
+      allow read:  if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Super Admin — App Configuration ───────────────────────────────────────
+    // All admins can read config; only superadmin can write
+    match /appConfig/{docId} {
+      allow read:  if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
     // ── Block everything else ─────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+

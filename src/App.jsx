@@ -17,6 +17,14 @@ import AboutPage from './pages/AboutPage';
 import LandingPage from './pages/LandingPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import AdminManagementPage from './pages/AdminManagementPage';
+import SecurityCenterPage from './pages/superadmin/SecurityCenterPage';
+import DatabaseInspectorPage from './pages/superadmin/DatabaseInspectorPage';
+import BulkOperationsPage from './pages/superadmin/BulkOperationsPage';
+import PermissionMatrixPage from './pages/superadmin/PermissionMatrixPage';
+import SystemHealthPage from './pages/superadmin/SystemHealthPage';
+import AppConfigPage from './pages/superadmin/AppConfigPage';
+import ImpersonationPage from './pages/superadmin/ImpersonationPage';
+import CompliancePage from './pages/superadmin/CompliancePage';
 import SessionTimeoutModal from './components/layout/SessionTimeoutModal';
 
 import { auth, db } from './data/firebase';
@@ -281,22 +289,16 @@ export default function App() {
               <Route path="/analytics"    element={<AnalyticsPage />} />
               <Route path="/settings"     element={<SettingsPage />} />
               {/* Super Admin only routes */}
-              <Route
-                path="/super-admin"
-                element={
-                  <SuperAdminRoute>
-                    <SuperAdminPage />
-                  </SuperAdminRoute>
-                }
-              />
-              <Route
-                path="/super-admin/admins"
-                element={
-                  <SuperAdminRoute>
-                    <AdminManagementPage />
-                  </SuperAdminRoute>
-                }
-              />
+              <Route path="/super-admin" element={<SuperAdminRoute><SuperAdminPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/admins" element={<SuperAdminRoute><AdminManagementPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/security" element={<SuperAdminRoute><SecurityCenterPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/database" element={<SuperAdminRoute><DatabaseInspectorPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/bulk" element={<SuperAdminRoute><BulkOperationsPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/permissions" element={<SuperAdminRoute><PermissionMatrixPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/health" element={<SuperAdminRoute><SystemHealthPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/config" element={<SuperAdminRoute><AppConfigPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/impersonate" element={<SuperAdminRoute><ImpersonationPage /></SuperAdminRoute>} />
+              <Route path="/super-admin/compliance" element={<SuperAdminRoute><CompliancePage /></SuperAdminRoute>} />
             </Route>
             {/* Catch-all → login */}
             <Route path="*" element={<Navigate to="/login" replace />} />
