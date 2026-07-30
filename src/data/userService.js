@@ -46,7 +46,11 @@ export const STATUSES = [
 // Admin is display-only — cannot be selected from any form dropdown.
 const ADMIN_ROLE_META = { value: 'admin', label: 'Admin', color: '#F87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.2)' };
 
+// Super Admin is display-only — only set via the CLI bootstrap script.
+const SUPER_ADMIN_ROLE_META = { value: 'superadmin', label: 'Super Admin', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)' };
+
 export const getRoleMeta = (value) => {
+  if (value === 'superadmin') return SUPER_ADMIN_ROLE_META;
   if (value === 'admin') return ADMIN_ROLE_META;
   const val = String(value || '').toLowerCase();
   if (val === 'student') return ROLES[0];

@@ -30,7 +30,7 @@ import SupportAgentIcon    from "@mui/icons-material/SupportAgent";
 import { db }              from "../../data/firebase";
 import {
   collection, query, orderBy, where, onSnapshot,
-  doc, addDoc, updateDoc, writeBatch, Timestamp, limit, getDocs,
+  doc, addDoc, setDoc, updateDoc, writeBatch, Timestamp, limit, getDocs,
   serverTimestamp,
 } from "firebase/firestore";
 import ReplyDialog from "./ReplyDialog";
@@ -65,14 +65,13 @@ function relativeTime(ts) {
 async function resolveUidByEmail(email) {
   if (!email) return null;
   try {
-    const q    = query(
-      collection(db, "users"),
-      where("email", "==", email.toLowerCase().trim()),
-      limit(1)
-    );
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return snap.docs[0].id; // doc ID == uid
+    const snap = await getDocs(collection(db, "users"));
+    const target = email.toLowerCase().trim();
+    const userDoc = snap.docs.find(d => {
+      const uEmail = d.data().email || "";
+      return uEmail.toLowerCase().trim() === target;
+    });
+    return userDoc ? userDoc.id : null;
   } catch (err) {
     console.error("[FinGuard] resolveUidByEmail error:", err);
     return null;
@@ -87,17 +86,24 @@ async function sendReplyToFirestore({ complaintId, email, title, body }) {
   // 1. Look up user UID from email
   const targetUid = await resolveUidByEmail(email);
 
-  // 2. Write the reply notification (readable by the mobile app via uid filter)
-  await addDoc(collection(db, "notifications"), {
+  if (!targetUid) {
+    throw new Error("Cannot reply: No mobile app user found with this email.");
+  }
+
+  // 2. Write the reply notification to the user's specific notifications subcollection
+  const newNotifRef = doc(collection(db, "users", targetUid, "notifications"));
+  await setDoc(newNotifRef, {
+    id:                 newNotifRef.id,
     title,
-    body,
-    type:               "admin_reply",
+    message:            body,
+    type:               "system",
+    isRead:             false,
     read:               false,
-    uid:                targetUid || null,
-    email,
-    isUserTargeted:     true,
-    replyToComplaintId: complaintId,
-    createdAt:          serverTimestamp(),
+    studentId:          targetUid,
+    severity:           "info",
+    sourceModule:       "Support",
+    relatedEntityId:    complaintId,
+    createdAt:          Date.now(),
   });
 
   // 3. Mark the original complaint as replied

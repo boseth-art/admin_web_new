@@ -1,0 +1,388 @@
+{
+  "communities": {
+    "0": [
+      "src_app",
+      "src_app_activity_events",
+      "src_app_app",
+      "src_app_authcontext",
+      "src_app_authprovider",
+      "src_app_navigatebridge",
+      "src_app_protectedroute",
+      "src_app_useauth",
+      "src_components_layout_dashboardlayout",
+      "src_components_layout_dashboardlayout_dashboardlayout",
+      "src_components_layout_dashboardlayout_navitems",
+      "src_components_layout_notificationspanel_notificationspanel",
+      "src_components_layout_sessiontimeoutmodal",
+      "src_components_layout_sessiontimeoutmodal_sessiontimeoutmodal",
+      "src_main",
+      "src_pages_landingpage",
+      "src_pages_landingpage_landingpage",
+      "src_pages_landingpage_quotes",
+      "src_pages_settingspage",
+      "src_pages_settingspage_settingspage",
+      "src_security_authsecurity_clearsession",
+      "src_security_authsecurity_issessionvalid",
+      "src_security_authsecurity_startsession",
+      "src_security_authsecurity_touchsession",
+      "src_theme_theme",
+      "src_theme_theme_theme"
+    ],
+    "1": [
+      "emotion_react",
+      "emotion_styled",
+      "firebase",
+      "framer_motion",
+      "mui_icons_material",
+      "mui_material",
+      "mui_x_charts",
+      "package_dependencies",
+      "package_dependencies_emotion_react",
+      "package_dependencies_emotion_styled",
+      "package_dependencies_firebase",
+      "package_dependencies_firebase_admin",
+      "package_dependencies_framer_motion",
+      "package_dependencies_mui_icons_material",
+      "package_dependencies_mui_material",
+      "package_dependencies_mui_x_charts",
+      "package_dependencies_react",
+      "package_dependencies_react_dom",
+      "package_dependencies_react_router_dom",
+      "package_dependencies_recharts",
+      "package_json_firebase_admin",
+      "react",
+      "react_dom",
+      "react_router_dom",
+      "recharts"
+    ],
+    "2": [
+      "src_data_firebase",
+      "src_data_firebase_app",
+      "src_data_firebase_auth",
+      "src_data_firebase_db",
+      "src_data_firebase_firebaseconfig",
+      "src_data_firebase_functionsinstance",
+      "src_pages_aboutpage",
+      "src_pages_aboutpage_aboutpage",
+      "src_pages_aboutpage_bgorb",
+      "src_pages_aboutpage_features",
+      "src_pages_aboutpage_stats",
+      "src_pages_aboutpage_team",
+      "src_pages_dashboardpage",
+      "src_pages_dashboardpage_chart_colors",
+      "src_pages_dashboardpage_customtooltip",
+      "src_pages_dashboardpage_dashboardpage",
+      "src_pages_dashboardpage_emptystate",
+      "src_pages_dashboardpage_statcard",
+      "src_pages_dashboardpage_status_colors",
+      "src_pages_transactionspage",
+      "src_pages_transactionspage_status_colors",
+      "src_pages_transactionspage_transactionspage"
+    ],
+    "3": [
+      "eslint",
+      "eslint_js",
+      "eslint_plugin_react_hooks",
+      "eslint_plugin_react_refresh",
+      "globals",
+      "package_devdependencies",
+      "package_devdependencies_eslint",
+      "package_devdependencies_eslint_js",
+      "package_devdependencies_eslint_plugin_react_hooks",
+      "package_devdependencies_eslint_plugin_react_refresh",
+      "package_devdependencies_globals",
+      "package_devdependencies_types_react",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_vite",
+      "package_devdependencies_vitejs_plugin_react",
+      "types_react",
+      "types_react_dom",
+      "vite",
+      "vitejs_plugin_react"
+    ],
+    "4": [
+      "src_data_userservice",
+      "src_data_userservice_admin_role_meta",
+      "src_data_userservice_createuser",
+      "src_data_userservice_deleteuser",
+      "src_data_userservice_getrolemeta",
+      "src_data_userservice_getstatusmeta",
+      "src_data_userservice_roles",
+      "src_data_userservice_statuses",
+      "src_data_userservice_translateautherror",
+      "src_data_userservice_updateuser",
+      "src_pages_userspage",
+      "src_pages_userspage_avatar_colors",
+      "src_pages_userspage_deletedialog",
+      "src_pages_userspage_empty_form",
+      "src_pages_userspage_fieldsx",
+      "src_pages_userspage_hextorgb",
+      "src_pages_userspage_userformdialog",
+      "src_pages_userspage_userspage"
+    ],
+    "5": [
+      "docref_rfc_5321",
+      "src_pages_loginpage",
+      "src_pages_loginpage_bgorb",
+      "src_pages_loginpage_features",
+      "src_pages_loginpage_loginpage",
+      "src_pages_loginpage_quotes",
+      "src_security_authsecurity",
+      "src_security_authsecurity_checklockout",
+      "src_security_authsecurity_clearlockout",
+      "src_security_authsecurity_formatlockoutremaining",
+      "src_security_authsecurity_getbruteforcestate",
+      "src_security_authsecurity_rationale_5",
+      "src_security_authsecurity_recordfailedattempt",
+      "src_security_authsecurity_sanitiseinput",
+      "src_security_authsecurity_validateemail",
+      "src_security_authsecurity_validatepassword"
+    ],
+    "6": [
+      "firebase_functions",
+      "functions_package",
+      "functions_package_dependencies",
+      "functions_package_dependencies_firebase_admin",
+      "functions_package_dependencies_firebase_functions",
+      "functions_package_description",
+      "functions_package_engines",
+      "functions_package_engines_node",
+      "functions_package_json_firebase_admin",
+      "functions_package_name",
+      "functions_package_private",
+      "functions_package_scripts",
+      "functions_package_scripts_deploy",
+      "functions_package_scripts_serve"
+    ],
+    "7": [
+      "src_security_encryption",
+      "src_security_encryption_decryptfield",
+      "src_security_encryption_decryptsensitivefields",
+      "src_security_encryption_encryptfield",
+      "src_security_encryption_encryptsensitivefields",
+      "src_security_encryption_frombase64",
+      "src_security_encryption_getcryptokey",
+      "src_security_encryption_isencrypted",
+      "src_security_encryption_tobase64",
+      "src_security_encryption_transaction_sensitive_fields",
+      "src_security_encryption_user_sensitive_fields"
+    ],
+    "8": [
+      "package",
+      "package_name",
+      "package_private",
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_dev",
+      "package_scripts_lint",
+      "package_scripts_preview",
+      "package_type",
+      "package_version"
+    ],
+    "9": [
+      "src_components_layout_notificationspanel",
+      "src_components_layout_notificationspanel_ackbutton",
+      "src_components_layout_notificationspanel_notifitem",
+      "src_components_layout_notificationspanel_relativetime",
+      "src_components_layout_notificationspanel_resolveuidbyemail",
+      "src_components_layout_notificationspanel_sendreplytofirestore",
+      "src_components_layout_notificationspanel_type_config",
+      "src_components_layout_replydialog",
+      "src_components_layout_replydialog_replydialog",
+      "src_components_layout_replydialog_resolveuidbyemail"
+    ],
+    "10": [
+      "src_pages_analyticspage",
+      "src_pages_analyticspage_analyticspage",
+      "src_pages_analyticspage_customtooltip",
+      "src_pages_analyticspage_emptystate",
+      "src_pages_analyticspage_month_names",
+      "src_pages_analyticspage_monthkey",
+      "src_pages_analyticspage_monthlabel",
+      "src_pages_analyticspage_parsedate",
+      "src_pages_analyticspage_sectionheading",
+      "src_pages_analyticspage_usergrowthtooltip"
+    ],
+    "11": [
+      "functions_index",
+      "functions_index_admin",
+      "functions_index_db",
+      "functions_index_functions",
+      "functions_index_resolveuidbyemail",
+      "functions_index_valid_roles",
+      "functions_index_verifyadmin"
+    ],
+    "12": [
+      "list_users",
+      "list_users_app",
+      "list_users_auth",
+      "list_users_checkdatabase",
+      "list_users_db",
+      "list_users_require",
+      "list_users_serviceaccount"
+    ],
+    "13": [
+      "create_admin",
+      "create_admin_app",
+      "create_admin_auth",
+      "create_admin_db",
+      "create_admin_rationale_15",
+      "create_admin_require"
+    ],
+    "14": [
+      "test_query",
+      "test_query_app",
+      "test_query_auth",
+      "test_query_db",
+      "test_query_firebaseconfig",
+      "test_query_testquery"
+    ],
+    "15": [
+      "test_txns",
+      "test_txns_app",
+      "test_txns_auth",
+      "test_txns_db",
+      "test_txns_firebaseconfig",
+      "test_txns_testsubcollections"
+    ],
+    "16": [
+      "eslint_config"
+    ],
+    "17": [
+      "vite_config"
+    ]
+  },
+  "cohesion": {
+    "0": 0.12923076923076923,
+    "1": 0.08,
+    "2": 0.1038961038961039,
+    "3": 0.10526315789473684,
+    "4": 0.2222222222222222,
+    "5": 0.275,
+    "6": 0.14285714285714285,
+    "7": 0.3090909090909091,
+    "8": 0.2,
+    "9": 0.3111111111111111,
+    "10": 0.26666666666666666,
+    "11": 0.2857142857142857,
+    "12": 0.2857142857142857,
+    "13": 0.3333333333333333,
+    "14": 0.3333333333333333,
+    "15": 0.3333333333333333,
+    "16": 1.0,
+    "17": 1.0
+  },
+  "gods": [
+    {
+      "id": "src_data_firebase_db",
+      "label": "db",
+      "degree": 11
+    },
+    {
+      "id": "src_pages_loginpage_loginpage",
+      "label": "LoginPage()",
+      "degree": 10
+    },
+    {
+      "id": "src_app_useauth",
+      "label": "useAuth()",
+      "degree": 9
+    },
+    {
+      "id": "src_pages_userspage_userspage",
+      "label": "UsersPage()",
+      "degree": 9
+    },
+    {
+      "id": "src_app_authprovider",
+      "label": "AuthProvider()",
+      "degree": 6
+    },
+    {
+      "id": "package_scripts",
+      "label": "scripts",
+      "degree": 5
+    },
+    {
+      "id": "src_data_firebase_auth",
+      "label": "auth",
+      "degree": 5
+    },
+    {
+      "id": "src_pages_analyticspage_analyticspage",
+      "label": "AnalyticsPage()",
+      "degree": 5
+    },
+    {
+      "id": "src_security_authsecurity_checklockout",
+      "label": "checkLockout()",
+      "degree": 5
+    },
+    {
+      "id": "src_security_encryption_decryptfield",
+      "label": "decryptField()",
+      "degree": 5
+    }
+  ],
+  "surprises": [
+    {
+      "source": "LoginPage()",
+      "target": "useAuth()",
+      "source_files": [
+        "src/pages/LoginPage.jsx",
+        "src/App.jsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "bridges separate communities"
+    },
+    {
+      "source": "DashboardLayout()",
+      "target": "useAuth()",
+      "source_files": [
+        "src/components/layout/DashboardLayout.jsx",
+        "src/App.jsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "SettingsPage()",
+      "target": "useAuth()",
+      "source_files": [
+        "src/pages/SettingsPage.jsx",
+        "src/App.jsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "AuthProvider()",
+      "target": "clearSession()",
+      "source_files": [
+        "src/App.jsx",
+        "src/security/authSecurity.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "AuthProvider()",
+      "target": "isSessionValid()",
+      "source_files": [
+        "src/App.jsx",
+        "src/security/authSecurity.js"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

@@ -39,6 +39,16 @@ const theme = createTheme({
       disabled: '#475569',
     },
     divider: 'rgba(45,212,191,0.1)',
+    // ── Super Admin gold palette ─────────────────────────────────────────
+    superAdmin: {
+      main:       '#F59E0B',
+      light:      '#FCD34D',
+      dark:       '#D97706',
+      contrastText: '#0D1B2A',
+      bg:         'rgba(245,158,11,0.1)',
+      border:     'rgba(245,158,11,0.25)',
+      glow:       'rgba(245,158,11,0.35)',
+    },
   },
   typography: {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",

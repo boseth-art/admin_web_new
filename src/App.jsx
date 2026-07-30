@@ -15,6 +15,8 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import AboutPage from './pages/AboutPage';
 import LandingPage from './pages/LandingPage';
+import SuperAdminPage from './pages/SuperAdminPage';
+import AdminManagementPage from './pages/AdminManagementPage';
 import SessionTimeoutModal from './components/layout/SessionTimeoutModal';
 
 import { auth, db } from './data/firebase';
@@ -107,12 +109,12 @@ function AuthProvider({ children }) {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDoc = await getDoc(userDocRef);
 
-          if (userDoc.exists() && userDoc.data().role === 'admin') {
+          if (userDoc.exists() && ['admin', 'superadmin'].includes(userDoc.data().role)) {
             const userData = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              name: userDoc.data().name || 'Super Admin',
-              role: 'admin',
+              name: userDoc.data().name || 'Admin',
+              role: userDoc.data().role,
               ...userDoc.data(),
             };
             setUser(userData);
@@ -127,7 +129,7 @@ function AuthProvider({ children }) {
               window.addEventListener(evt, handleActivity, { passive: true })
             );
           } else {
-            console.warn('[FinGuard] Access denied: user does not have admin role.');
+            console.warn('[FinGuard] Access denied: user does not have admin or superadmin role.');
             await signOut(auth);
             setUser(null);
             userRef.current = null;
@@ -209,9 +211,39 @@ function ProtectedRoute({ children }) {
   }
 
   // Double-check role even though AuthProvider already verifies it
-  if (!user || user.role !== 'admin') {
+  if (!user || !['admin', 'superadmin'].includes(user.role)) {
     return <Navigate to="/login" replace />;
   }
+
+  return children;
+}
+
+// ─── Super Admin Route ────────────────────────────────────────────────────
+/**
+ * Guards routes that are ONLY accessible to superadmin.
+ * Regular admins are redirected to /dashboard.
+ */
+function SuperAdminRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          height: '100vh',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #070D18 0%, #0D1B2A 100%)',
+        }}
+      >
+        <CircularProgress sx={{ color: '#F59E0B' }} />
+      </Box>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'superadmin') return <Navigate to="/dashboard" replace />;
 
   return children;
 }
@@ -248,6 +280,23 @@ export default function App() {
               <Route path="/transactions" element={<TransactionsPage />} />
               <Route path="/analytics"    element={<AnalyticsPage />} />
               <Route path="/settings"     element={<SettingsPage />} />
+              {/* Super Admin only routes */}
+              <Route
+                path="/super-admin"
+                element={
+                  <SuperAdminRoute>
+                    <SuperAdminPage />
+                  </SuperAdminRoute>
+                }
+              />
+              <Route
+                path="/super-admin/admins"
+                element={
+                  <SuperAdminRoute>
+                    <AdminManagementPage />
+                  </SuperAdminRoute>
+                }
+              />
             </Route>
             {/* Catch-all → login */}
             <Route path="*" element={<Navigate to="/login" replace />} />

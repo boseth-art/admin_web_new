@@ -20,6 +20,7 @@ import { useAuth } from '../App';
 import { auth, db } from '../data/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { hashEmailForDocId, decryptPasswordWithAnswers } from '../security/recoveryCrypto';
 import {
   sanitiseInput,
   validateEmail,
@@ -84,6 +85,16 @@ export default function LoginPage() {
   const [complaintMessage, setComplaintMessage] = useState('');
   const [complaintStatus, setComplaintStatus] = useState('idle');
   const [complaintError, setComplaintError] = useState('');
+
+  // ── Forgot Password state ───────────────────────────────────────────────
+  const [forgotPwdOpen, setForgotPwdOpen] = useState(false);
+  const [forgotPwdStep, setForgotPwdStep] = useState(1); // 1 = Email, 2 = Questions
+  const [forgotPwdEmail, setForgotPwdEmail] = useState('');
+  const [securityQuestions, setSecurityQuestions] = useState([]);
+  const [recoveryBundle, setRecoveryBundle] = useState(null);
+  const [securityAnswers, setSecurityAnswers] = useState({});
+  const [forgotPwdStatus, setForgotPwdStatus] = useState('idle');
+  const [forgotPwdError, setForgotPwdError] = useState('');
 
   // ── Derive inline validation errors ────────────────────────────────────
   const emailError    = touched.email    ? validateEmail(form.email).message    : '';
@@ -259,6 +270,60 @@ export default function LoginPage() {
       console.error(err);
       setComplaintStatus('error');
       setComplaintError(err.message || 'Failed to submit complaint.');
+    }
+  };
+
+  // ── Forgot Password Handlers ───────────────────────────────────────────────
+  const handleForgotPasswordSubmitEmail = async (e) => {
+    e.preventDefault();
+    if (!forgotPwdEmail) return;
+    setForgotPwdStatus('loading');
+    setForgotPwdError('');
+    try {
+      const emailHash = await hashEmailForDocId(forgotPwdEmail);
+      const docSnap = await getDoc(doc(db, 'admin_recovery', emailHash));
+      if (!docSnap.exists()) {
+        throw new Error('No recovery data found for this admin email. Ensure questions are set up.');
+      }
+      
+      const data = docSnap.data();
+      setSecurityQuestions(data.questions.map((q, idx) => ({ id: `q${idx}`, question: q })));
+      setRecoveryBundle(data);
+      setForgotPwdStep(2);
+      setForgotPwdStatus('idle');
+    } catch (err) {
+      console.error(err);
+      setForgotPwdStatus('error');
+      setForgotPwdError(err.message || 'Failed to retrieve security questions. Ensure this is an admin email and questions are set up.');
+    }
+  };
+
+  const handleForgotPasswordSubmitAnswers = async (e) => {
+    e.preventDefault();
+    setForgotPwdStatus('loading');
+    setForgotPwdError('');
+    try {
+      // Collect answers in the same order as questions
+      const answersArray = securityQuestions.map(sq => securityAnswers[sq.id] || '');
+      
+      let decryptedPassword;
+      try {
+        decryptedPassword = await decryptPasswordWithAnswers(recoveryBundle, answersArray);
+      } catch (decryptErr) {
+        throw new Error('Incorrect answers to security questions.', { cause: decryptErr });
+      }
+      
+      // Login with decrypted password
+      await signInWithEmailAndPassword(auth, forgotPwdEmail.trim().toLowerCase(), decryptedPassword);
+      
+      // Success - close modal and redirect to settings
+      setForgotPwdOpen(false);
+      // Pass the decrypted password so they don't have to type it again in Settings
+      navigate('/settings', { state: { forcePasswordChange: true, recoveryPassword: decryptedPassword }, replace: true });
+    } catch (err) {
+      console.error(err);
+      setForgotPwdStatus('error');
+      setForgotPwdError(err.message || 'Failed to verify answers or log in.');
     }
   };
 
@@ -534,6 +599,15 @@ export default function LoginPage() {
                   ),
                 }}
               />
+              
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, mt: -1.5 }}>
+                <Typography 
+                  onClick={() => { setForgotPwdOpen(true); setForgotPwdStep(1); setForgotPwdEmail(''); setForgotPwdError(''); }}
+                  sx={{ color: '#2DD4BF', cursor: 'pointer', fontSize: '0.82rem', '&:hover': { textDecoration: 'underline' } }}
+                >
+                  Forgot Password?
+                </Typography>
+              </Box>
 
               <Button
                 type="submit"
@@ -675,6 +749,105 @@ export default function LoginPage() {
             }}
           >
             {complaintStatus === 'loading' ? <CircularProgress size={20} color="inherit" /> : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Forgot Password Modal ────────────────────────────────────────────── */}
+      <Dialog 
+        open={forgotPwdOpen} 
+        onClose={() => {
+          if (forgotPwdStatus !== 'loading') setForgotPwdOpen(false);
+        }}
+        PaperProps={{
+          sx: {
+            background: 'rgba(13,27,42,0.95)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(45,212,191,0.2)',
+            borderRadius: 3,
+            minWidth: { xs: '90vw', sm: 400 }
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: '#F0F6FF', fontWeight: 700, pb: 1 }}>
+          Recover Admin Account
+        </DialogTitle>
+        <DialogContent sx={{ pb: 1 }}>
+          <Typography sx={{ color: '#94A3B8', fontSize: '0.85rem', mb: 3 }}>
+            {forgotPwdStep === 1 
+              ? 'Enter your admin email address to retrieve your security questions.' 
+              : 'Answer your security questions to log in and reset your password.'}
+          </Typography>
+
+          {forgotPwdError && (
+            <Alert severity="error" sx={{ mb: 3, background: 'rgba(248,113,113,0.1)', color: '#F87171', '& .MuiAlert-icon': { color: '#F87171' } }}>
+              {forgotPwdError}
+            </Alert>
+          )}
+
+          {forgotPwdStep === 1 ? (
+            <Box component="form" id="forgotpwd-form-1" onSubmit={handleForgotPasswordSubmitEmail} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <TextField
+                label="Admin Email Address"
+                type="email"
+                variant="outlined"
+                fullWidth
+                required
+                value={forgotPwdEmail}
+                onChange={(e) => setForgotPwdEmail(e.target.value)}
+                disabled={forgotPwdStatus === 'loading'}
+                sx={{
+                  '& .MuiOutlinedInput-root': { color: '#F0F6FF', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover fieldset': { borderColor: '#2DD4BF' }, '&.Mui-focused fieldset': { borderColor: '#2DD4BF' } },
+                  '& .MuiInputLabel-root': { color: '#94A3B8', '&.Mui-focused': { color: '#2DD4BF' } }
+                }}
+              />
+            </Box>
+          ) : (
+            <Box component="form" id="forgotpwd-form-2" onSubmit={handleForgotPasswordSubmitAnswers} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              {securityQuestions.map((sq, idx) => (
+                <Box key={sq.id} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography sx={{ color: '#F0F6FF', fontSize: '0.85rem' }}>{idx + 1}. {sq.question}</Typography>
+                  <TextField
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    required
+                    value={securityAnswers[sq.id] || ''}
+                    onChange={(e) => setSecurityAnswers({ ...securityAnswers, [sq.id]: e.target.value })}
+                    disabled={forgotPwdStatus === 'loading'}
+                    sx={{
+                      '& .MuiOutlinedInput-root': { color: '#F0F6FF', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' }, '&:hover fieldset': { borderColor: '#2DD4BF' }, '&.Mui-focused fieldset': { borderColor: '#2DD4BF' } },
+                    }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button 
+            onClick={() => {
+              if (forgotPwdStep === 2) setForgotPwdStep(1);
+              else setForgotPwdOpen(false);
+            }} 
+            disabled={forgotPwdStatus === 'loading'}
+            sx={{ color: '#94A3B8' }}
+          >
+            {forgotPwdStep === 2 ? 'Back' : 'Cancel'}
+          </Button>
+          <Button 
+            type="submit" 
+            form={forgotPwdStep === 1 ? "forgotpwd-form-1" : "forgotpwd-form-2"}
+            variant="contained" 
+            disabled={forgotPwdStatus === 'loading'}
+            sx={{
+              background: 'linear-gradient(135deg,#2DD4BF,#0D9488)',
+              color: '#FFF',
+              fontWeight: 700,
+              '&:hover': { background: 'linear-gradient(135deg,#0D9488,#0F766E)' }
+            }}
+          >
+            {forgotPwdStatus === 'loading' ? <CircularProgress size={20} color="inherit" /> : (forgotPwdStep === 1 ? 'Next' : 'Verify & Login')}
           </Button>
         </DialogActions>
       </Dialog>

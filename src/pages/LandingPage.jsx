@@ -15,7 +15,21 @@ const QUOTES = [
   {
     text: "An investment in knowledge pays the best interest.",
     author: "Benjamin Franklin"
+  },
+  {
+    text: "A wise man should have money in his head, but not in his heart.",
+    author: "Joseph Addison"
+  },
+  {
+    text: "It's not your salary that makes you rich, it's your spending habits.",
+    author: "Warrent Buffett"
+
+  },
+  {
+    text: "The best time to plant a tree was 20 years ago. The second best time is now.",
+    author: "Chinese Proverb"
   }
+
 ];
 
 export default function LandingPage() {
@@ -23,18 +37,18 @@ export default function LandingPage() {
   const [progress, setProgress] = useState(0);
   const DURATION_MS = 10000;
   const UPDATE_INTERVAL_MS = 50;
-  
+
   // Select a random quote on mount
   const [quote] = useState(() => QUOTES[Math.floor(Math.random() * QUOTES.length)]);
 
   useEffect(() => {
     const startTime = Date.now();
-    
+
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const newProgress = Math.min((elapsed / DURATION_MS) * 100, 100);
       setProgress(newProgress);
-      
+
       if (elapsed >= DURATION_MS) {
         clearInterval(interval);
         navigate('/about');
@@ -70,7 +84,7 @@ export default function LandingPage() {
           zIndex: 0,
         }}
       />
-      
+
       {/* Gradient Overlay */}
       <Box
         sx={{
@@ -87,12 +101,12 @@ export default function LandingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
         >
-          <Typography 
-            variant="h3" 
-            sx={{ 
-              color: '#F0F6FF', 
-              fontStyle: 'italic', 
-              fontWeight: 300, 
+          <Typography
+            variant="h3"
+            sx={{
+              color: '#F0F6FF',
+              fontStyle: 'italic',
+              fontWeight: 300,
               mb: 3,
               lineHeight: 1.4,
               fontFamily: 'serif'
@@ -100,14 +114,14 @@ export default function LandingPage() {
           >
             "{quote.text}"
           </Typography>
-          
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: '#2DD4BF', 
-              fontWeight: 600, 
-              letterSpacing: 2, 
-              textTransform: 'uppercase' 
+
+          <Typography
+            variant="h6"
+            sx={{
+              color: '#2DD4BF',
+              fontWeight: 600,
+              letterSpacing: 2,
+              textTransform: 'uppercase'
             }}
           >
             — {quote.author}
@@ -116,17 +130,17 @@ export default function LandingPage() {
       </Box>
 
       {/* Progress & Skip Section */}
-      <Box 
-        sx={{ 
-          position: 'absolute', 
-          bottom: 40, 
-          left: 0, 
-          right: 0, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 40,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
           gap: 2,
-          zIndex: 10 
+          zIndex: 10
         }}
       >
         <motion.div
@@ -134,11 +148,11 @@ export default function LandingPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 1, duration: 1 }}
         >
-          <Button 
+          <Button
             onClick={() => navigate('/about')}
-            sx={{ 
-              color: '#94A3B8', 
-              textTransform: 'none', 
+            sx={{
+              color: '#94A3B8',
+              textTransform: 'none',
               fontSize: '1rem',
               '&:hover': { color: '#F0F6FF', background: 'transparent' }
             }}
@@ -148,16 +162,16 @@ export default function LandingPage() {
         </motion.div>
 
         <Box sx={{ width: '100%', maxWidth: 300 }}>
-          <LinearProgress 
-            variant="determinate" 
-            value={progress} 
-            sx={{ 
-              height: 2, 
+          <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{
+              height: 2,
               background: 'rgba(255,255,255,0.1)',
               '& .MuiLinearProgress-bar': {
                 background: 'linear-gradient(90deg, #2DD4BF, #6366F1)'
               }
-            }} 
+            }}
           />
         </Box>
       </Box>

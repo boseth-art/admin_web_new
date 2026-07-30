@@ -1,0 +1,46 @@
+FinGuard Admin Portal - Comprehensive Technical Report
+
+1. Executive Summary
+The FinGuard Admin Portal is a specialized, secure web application designed to serve as the central command center for the FinGuard mobile application. It provides administrators with the tools necessary to monitor user activity, manage accounts, analyze financial data, and oversee the entire ecosystem.
+
+2. Technology Stack & Architecture
+- Core Framework: React 19 combined with React Router 7 for a responsive, Single Page Application (SPA) experience.
+- Bundler: Vite 8 for fast development and optimized production builds.
+- UI & Design: Material UI (MUI) v9 customized with a dark glassmorphism theme to provide a premium, modern aesthetic.
+- Data Visualization: Recharts 3 and MUI X-Charts 9 for real-time analytics and dashboards.
+- Backend & Authentication: Firebase JS SDK v12, utilizing Firebase Authentication for secure access and Cloud Firestore as the real-time NoSQL database.
+- Serverless Logic: Firebase Cloud Functions V1 (Node.js) to handle secure, admin-only operations that shouldn't be exposed directly to the client.
+- Security: Field-level encryption using the Browser Web Crypto API (AES-256-GCM) to protect sensitive financial data (balances, transactions, etc.) both in transit and at rest.
+- Hosting: Firebase Hosting, securely serving the production build.
+
+3. Ecosystem Interaction (User -> Admin -> Mobile Flow)
+The FinGuard ecosystem relies on a shared, real-time data layer (Firebase) to synchronize state between the mobile app (used by customers) and the web portal (used by admins).
+
+- Shared Backend: Both the mobile app and the admin portal connect to the same Firebase Authentication and Cloud Firestore instance.
+- Role-Based Access Control (RBAC): Every user authenticated in the system has a corresponding document in the Firestore `users` collection. Administrators are explicitly marked with `role: "admin"`.
+- Mobile App Operations: When a mobile user performs an action (e.g., records a transaction), the app writes this data to Firestore.
+- Admin Portal Real-time Updates: The admin portal uses Firestore's real-time snapshot listeners. When the mobile app updates the database, the admin dashboard updates instantaneously without needing a refresh.
+- Admin Interventions: When an admin makes a change via the web portal (e.g., sending a notification, changing a user's status), the update is pushed to Firestore, and the mobile app receives this state change in real-time.
+
+4. User Management: Suspending and Blocking Users
+A critical function of the admin portal is overseeing user accounts, which includes the ability to restrict access for malicious or non-compliant users.
+
+How the Admin Blocks/Suspends a User:
+1. The admin navigates to the "Users" page in the web portal, which lists all registered accounts.
+2. The admin selects a user and chooses to modify their status. Available statuses include: 'active', 'inactive', 'suspended', and 'deactivated'.
+3. To block access temporarily, the admin sets the status to 'suspended'.
+4. To block access permanently (Soft Delete), the admin deletes the user via the UI, which calls `deleteUser(uid)` in `userService.js`. This performs a "soft delete" by setting the user's status to 'deactivated' rather than wiping their data immediately.
+5. For complete removal (Hard Delete), the admin invokes a secure Cloud Function (`adminDeleteUser`) which permanently removes the user's Firebase Auth record and their Firestore document.
+
+How the Suspension Works Technically:
+- When the admin changes a user's status to 'suspended' or 'deactivated', the admin portal updates that user's document in the `users/{uid}` collection in Firestore.
+- The mobile application is designed to check the user's document status in Firestore.
+- This check happens during the mobile app's authentication flow (login) and ideally via a continuous real-time listener while the app is open.
+- If the mobile app detects that the user's status is 'suspended' or 'deactivated', the app logic forces the user to log out and denies further access to the application's features, displaying an appropriate message to the mobile user.
+- Additionally, Firebase Cloud Functions monitor these status changes. For instance, the `onUserDeleted` trigger fires when an Auth user is deleted, updating Firestore and sending an alert notification.
+
+5. Security Measures
+The admin portal employs strict security to ensure only authorized personnel can access sensitive data:
+- Session Management: Includes a 30-minute idle timeout with a warning modal, an absolute 8-hour maximum session cap, and brute-force protection (max 5 failed logins, then 15-minute lockout).
+- Server-Side Admin Verification: Admin privileges cannot be granted from the client application. They must be provisioned via a dedicated secure script (`create_admin.mjs`) or Cloud Functions. Firestore security rules enforce that only users with the admin role can read or write to administrative collections.
+- Data Encryption: Highly sensitive fields like `salary`, `loanAmount`, `balance`, and transaction `amount` are encrypted client-side using a shared AES-256-GCM key before being saved to Firestore.

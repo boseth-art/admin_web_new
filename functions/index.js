@@ -155,16 +155,32 @@ exports.createAdminNotification = functions.https.onCall(async (data, context) =
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  // If targeting a specific user, add the fields the mobile app queries on
-  if (uid) {
-    notification.uid = uid;
-    notification.isUserTargeted = true;
-  }
   if (email) {
     notification.email = email;
   }
 
-  await db.collection('notifications').add(notification);
+  // If targeting a specific user, write to their subcollection in the format the mobile app expects
+  if (uid) {
+    const newNotifRef = db.collection('users').doc(uid).collection('notifications').doc();
+    await newNotifRef.set({
+      id:                 newNotifRef.id,
+      title:              title,
+      message:            body,
+      type:               type,
+      isRead:             false,
+      read:               false,
+      studentId:          uid,
+      severity:           'info',
+      sourceModule:       'System',
+      createdAt:          Date.now(),
+    });
+    // Also write to the admin's view so they know it was sent
+    notification.isUserTargeted = true;
+    notification.uid = uid;
+    await db.collection('notifications').add(notification);
+  } else {
+    await db.collection('notifications').add(notification);
+  }
 
   return { success: true };
 });
@@ -431,18 +447,22 @@ exports.adminSendAcknowledgement = functions.https.onCall(async (data, context) 
     'is currently reviewing your concern. We will get back to you as soon as possible. ' +
     '– FinGuard Support Team';
 
-  await db.collection('notifications').add({
-    title:              "✅ Support: We've received your message",
-    body:               replyBody,
-    type:               'admin_reply',
-    read:               false,
-    uid:                targetUid || null,
-    email:              email,
-    isUserTargeted:     true,
-    replyToComplaintId: complaintId,
-    sentBy:             context.auth.uid,
-    createdAt:          admin.firestore.FieldValue.serverTimestamp(),
-  });
+  if (targetUid) {
+    const newNotifRef = db.collection('users').doc(targetUid).collection('notifications').doc();
+    await newNotifRef.set({
+      id:                 newNotifRef.id,
+      title:              "✅ Support: We've received your message",
+      message:            replyBody,
+      type:               'system',
+      isRead:             false,
+      read:               false,
+      studentId:          targetUid,
+      severity:           'info',
+      sourceModule:       'Support',
+      relatedEntityId:    complaintId,
+      createdAt:          Date.now(),
+    });
+  }
 
   // 5. Mark original complaint as replied
   await complaintRef.update({
@@ -488,19 +508,23 @@ exports.adminSendDetailedReply = functions.https.onCall(async (data, context) =>
   // 2. Resolve UID from email
   const targetUid = await resolveUidByEmail(email);
 
-  // 3. Write the custom reply notification targeted at the user
-  await db.collection('notifications').add({
-    title:              subject || 'Message from FinGuard Support',
-    body:               message,
-    type:               'admin_reply',
-    read:               false,
-    uid:                targetUid || null,
-    email:              email,
-    isUserTargeted:     true,
-    replyToComplaintId: complaintId,
-    sentBy:             context.auth.uid,
-    createdAt:          admin.firestore.FieldValue.serverTimestamp(),
-  });
+  // 3. Write the custom reply notification to the user's specific notifications subcollection
+  if (targetUid) {
+    const newNotifRef = db.collection('users').doc(targetUid).collection('notifications').doc();
+    await newNotifRef.set({
+      id:                 newNotifRef.id,
+      title:              subject || 'Message from FinGuard Support',
+      message:            message,
+      type:               'system',
+      isRead:             false,
+      read:               false,
+      studentId:          targetUid,
+      severity:           'info',
+      sourceModule:       'Support',
+      relatedEntityId:    complaintId,
+      createdAt:          Date.now(),
+    });
+  }
 
   // 4. Mark original complaint as replied (idempotent — already replied is fine here)
   await complaintRef.update({
@@ -511,4 +535,223 @@ exports.adminSendDetailedReply = functions.https.onCall(async (data, context) =>
 
   console.log(`[FinGuard] adminSendDetailedReply: replied to ${complaintId} for ${email}`);
   return { success: true, resolvedUid: targetUid };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN HELPER: Verify the caller holds the 'superadmin' JWT claim.
+// ─────────────────────────────────────────────────────────────────────────────
+const verifySuperAdmin = async (context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+  // Check JWT claim first (fast path)
+  if (context.auth.token.role === 'superadmin') return;
+
+  // Fallback: check Firestore document (handles token refresh delays)
+  const callerDoc = await db.collection('users').doc(context.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'superadmin') {
+    throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN 1: Create Admin Account
+// Only super admins can create new admin accounts.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.superAdminCreateAdmin = functions.https.onCall(async (data, context) => {
+  await verifySuperAdmin(context);
+
+  const { email, password, displayName, phone = '' } = data;
+
+  if (!email || !password || !displayName) {
+    throw new functions.https.HttpsError('invalid-argument', 'email, password, and displayName are required.');
+  }
+  if (password.length < 8) {
+    throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 8 characters.');
+  }
+
+  try {
+    // 1. Create Firebase Auth user
+    const newUser = await admin.auth().createUser({ email, password, displayName });
+
+    // 2. Set custom claim: role = 'admin'
+    await admin.auth().setCustomUserClaims(newUser.uid, { role: 'admin' });
+
+    // 3. Write Firestore profile
+    await db.collection('users').doc(newUser.uid).set({
+      uid:          newUser.uid,
+      email,
+      name:         displayName,
+      fullName:     displayName,
+      phone:        phone || '',
+      mobile:       phone || '',
+      role:         'admin',
+      plan:         'Enterprise',
+      status:       'active',
+      balance:      0,
+      transactions: 0,
+      joined:       new Date().toISOString().split('T')[0],
+      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      createdBy:    context.auth.uid,
+    });
+
+    // 4. Notify (in notifications collection)
+    await db.collection('notifications').add({
+      title:     '👑 New admin account created',
+      body:      `Super Admin created admin account for ${displayName} (${email}).`,
+      type:      'system',
+      read:      false,
+      uid:       newUser.uid,
+      email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[FinGuard] superAdminCreateAdmin: ${email} as admin by ${context.auth.uid}`);
+    return { success: true, uid: newUser.uid };
+
+  } catch (error) {
+    console.error('[FinGuard] superAdminCreateAdmin error:', error);
+    if (error.code === 'auth/email-already-exists') {
+      throw new functions.https.HttpsError('already-exists', 'An account with this email already exists.');
+    }
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN 2: Update Admin Account
+// Super admins can update any admin's profile and status.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.superAdminUpdateAdmin = functions.https.onCall(async (data, context) => {
+  await verifySuperAdmin(context);
+
+  const { uid, displayName, email, phone, status } = data;
+  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
+
+  const VALID_STATUSES = ['active', 'inactive', 'suspended'];
+  if (status && !VALID_STATUSES.includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
+  }
+
+  try {
+    // Update Firebase Auth record
+    const authUpdate = {};
+    if (displayName) authUpdate.displayName = displayName;
+    if (email)       authUpdate.email       = email;
+    if (Object.keys(authUpdate).length > 0) {
+      await admin.auth().updateUser(uid, authUpdate);
+    }
+
+    // Update Firestore
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (displayName) { update.name = displayName; update.fullName = displayName; }
+    if (email)       update.email  = email;
+    if (phone)       { update.phone = phone; update.mobile = phone; }
+    if (status)      update.status = status;
+
+    await db.collection('users').doc(uid).update(update);
+
+    console.log(`[FinGuard] superAdminUpdateAdmin: updated ${uid} by ${context.auth.uid}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error('[FinGuard] superAdminUpdateAdmin error:', error);
+    if (error.code === 'auth/user-not-found') {
+      throw new functions.https.HttpsError('not-found', 'No user found with that UID.');
+    }
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN 3: Revoke Admin Access (soft)
+// Strips the 'admin' JWT claim and sets Firestore status to 'revoked'.
+// The Auth account and Firestore document are preserved — it's reversible.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.superAdminRevokeAdmin = functions.https.onCall(async (data, context) => {
+  await verifySuperAdmin(context);
+
+  const { uid } = data;
+  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
+
+  // Block revoking yourself
+  if (uid === context.auth.uid) {
+    throw new functions.https.HttpsError('failed-precondition', 'You cannot revoke your own super admin access.');
+  }
+
+  try {
+    // Strip the role custom claim (set to null — empty claims object)
+    await admin.auth().setCustomUserClaims(uid, { role: null });
+
+    // Update Firestore
+    await db.collection('users').doc(uid).update({
+      role:      'revoked',
+      status:    'revoked',
+      revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+      revokedBy: context.auth.uid,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('notifications').add({
+      title:     '⛔ Admin access revoked',
+      body:      `Admin access has been revoked for user ${uid} by super admin.`,
+      type:      'alert',
+      read:      false,
+      uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[FinGuard] superAdminRevokeAdmin: revoked ${uid} by ${context.auth.uid}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error('[FinGuard] superAdminRevokeAdmin error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN 4: Delete Admin Account (hard)
+// Permanently deletes the Firebase Auth user and Firestore document.
+// Cannot target self or other super admins.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.superAdminDeleteAdmin = functions.https.onCall(async (data, context) => {
+  await verifySuperAdmin(context);
+
+  const { uid } = data;
+  if (!uid) throw new functions.https.HttpsError('invalid-argument', 'uid is required.');
+  if (uid === context.auth.uid) {
+    throw new functions.https.HttpsError('failed-precondition', 'You cannot delete your own account.');
+  }
+
+  try {
+    // Block deleting another super admin
+    const targetUser = await admin.auth().getUser(uid);
+    if (targetUser.customClaims && targetUser.customClaims.role === 'superadmin') {
+      throw new functions.https.HttpsError('permission-denied', 'Super admin accounts cannot be deleted via the web panel.');
+    }
+
+    // Hard delete Auth + Firestore
+    await admin.auth().deleteUser(uid);
+    await db.collection('users').doc(uid).delete();
+
+    await db.collection('notifications').add({
+      title:     '🗑️ Admin account deleted',
+      body:      `Admin account ${uid} has been permanently deleted by super admin.`,
+      type:      'alert',
+      read:      false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[FinGuard] superAdminDeleteAdmin: deleted ${uid} by ${context.auth.uid}`);
+    return { success: true };
+
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('[FinGuard] superAdminDeleteAdmin error:', error);
+    if (error.code === 'auth/user-not-found') {
+      throw new functions.https.HttpsError('not-found', 'No user found with that UID.');
+    }
+    throw new functions.https.HttpsError('internal', error.message);
+  }
 });

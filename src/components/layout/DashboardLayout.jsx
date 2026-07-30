@@ -5,6 +5,7 @@ import {
   ListItemIcon, ListItemText, IconButton, Avatar, Tooltip,
   Divider, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent,
   DialogContentText, DialogActions, Button, CircularProgress, Chip,
+  Select, MenuItem, FormControl, InputLabel, TextField
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
@@ -15,17 +16,37 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import TuneIcon from '@mui/icons-material/Tune';
 import { useAuth } from '../../App';
 import NotificationsPanel from './NotificationsPanel';
+import { db } from '../../data/firebase';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { encryptPasswordWithAnswers, hashEmailForDocId } from '../../security/recoveryCrypto';
+
+const SECURITY_QUESTIONS_PRESETS = [
+  { id: 'q1', question: 'What was your childhood nickname?' },
+  { id: 'q2', question: 'In what city did you meet your spouse/significant other?' },
+  { id: 'q3', question: 'What is the name of your favorite childhood friend?' },
+  { id: 'q4', question: 'What street did you live on in third grade?' },
+  { id: 'q5', question: 'What is the middle name of your youngest child?' },
+];
 
 const DRAWER_WIDTH = 260;
 
 const navItems = [
-  { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', section: 'main' },
-  { label: 'Users', icon: <PeopleIcon />, path: '/users', badge: '2.4K', section: 'main' },
-  { label: 'Transactions', icon: <ReceiptLongIcon />, path: '/transactions', section: 'main' },
-  { label: 'Analytics', icon: <BarChartIcon />, path: '/analytics', section: 'main' },
-  { label: 'Settings', icon: <SettingsIcon />, path: '/settings', section: 'manage' },
+  { label: 'Dashboard',    icon: <DashboardIcon />,    path: '/dashboard',    section: 'main' },
+  { label: 'Users',        icon: <PeopleIcon />,        path: '/users',        badge: '2.4K', section: 'main' },
+  { label: 'Transactions', icon: <ReceiptLongIcon />,   path: '/transactions', section: 'main' },
+  { label: 'Analytics',   icon: <BarChartIcon />,      path: '/analytics',    section: 'main' },
+  { label: 'Settings',    icon: <SettingsIcon />,      path: '/settings',     section: 'manage' },
+];
+
+// Super admin exclusive nav items
+const superAdminNavItems = [
+  { label: 'Control Panel',    icon: <TuneIcon />,                  path: '/super-admin' },
+  { label: 'Admin Management', icon: <SupervisorAccountIcon />,      path: '/super-admin/admins' },
 ];
 
 export default function DashboardLayout() {
@@ -37,6 +58,59 @@ export default function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+
+  // Security Questions Setup State
+  const [setupOpen, setSetupOpen] = useState(user && user.role === 'admin' && !user.securityQuestions);
+  const [selectedQs, setSelectedQs] = useState(['', '', '']);
+  const [answers, setAnswers] = useState(['', '', '']);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState('');
+
+  const handleSetupSubmit = async () => {
+    if (selectedQs.includes('') || answers.some(a => !a.trim())) {
+      setSetupError('Please select and answer all 3 questions.');
+      return;
+    }
+    if (!currentPassword) {
+      setSetupError('Please enter your current password so we can securely encrypt it.');
+      return;
+    }
+    const uniqueQs = new Set(selectedQs);
+    if (uniqueQs.size !== 3) {
+      setSetupError('Please select 3 different questions.');
+      return;
+    }
+    setSetupError('');
+    setSetupLoading(true);
+
+    try {
+      // Encrypt the provided password using the answers
+      const { salt, iv, ciphertext } = await encryptPasswordWithAnswers(currentPassword, answers);
+      
+      // Hash the email to use as the document ID
+      const emailHash = await hashEmailForDocId(user.email);
+
+      // Save encrypted bundle to public admin_recovery collection
+      await setDoc(doc(db, 'admin_recovery', emailHash), {
+        questions: selectedQs.map(qId => SECURITY_QUESTIONS_PRESETS.find(q => q.id === qId).question),
+        salt,
+        iv,
+        ciphertext,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Mark the user as having security questions set
+      await updateDoc(doc(db, 'users', user.uid), { securityQuestions: true });
+
+      setSetupOpen(false);
+    } catch (err) {
+      console.error(err);
+      setSetupError('Failed to save security questions.');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
 
   const handleLogoutRequest = () => setLogoutDialogOpen(true);
 
@@ -114,16 +188,66 @@ export default function DashboardLayout() {
             <ListItemText primary="About App" primaryTypographyProps={{ fontSize: '0.875rem', color: '#94A3B8' }} />
           </ListItemButton>
         </List>
+        {/* Super Admin section — only visible to superadmin */}
+        {user?.role === 'superadmin' && (
+          <>
+            <Typography variant="caption" sx={{ color: '#92400E', fontWeight: 700, letterSpacing: '0.1em', px: 2, display: 'block', mt: 2, mb: 1, textTransform: 'uppercase' }}>
+              ⚡ Super Admin
+            </Typography>
+            <List disablePadding>
+              {superAdminNavItems.map(({ label, icon, path }) => {
+                const active = location.pathname === path || location.pathname.startsWith(path + '/');
+                return (
+                  <ListItemButton
+                    key={path}
+                    selected={active}
+                    onClick={() => { navigate(path); setMobileOpen(false); }}
+                    sx={{
+                      borderRadius: 2, mb: 0.5, pl: 2,
+                      '&.Mui-selected': {
+                        background: 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.08))',
+                        borderLeft: '3px solid #F59E0B',
+                        '& .MuiListItemIcon-root': { color: '#F59E0B' },
+                        '& .MuiListItemText-primary': { color: '#F59E0B', fontWeight: 600 },
+                        '&:hover': { background: 'rgba(245,158,11,0.22)' },
+                      },
+                      '&:hover': { background: 'rgba(245,158,11,0.08)' },
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 36, color: active ? '#F59E0B' : '#78716C' }}>{icon}</ListItemIcon>
+                    <ListItemText
+                      primary={label}
+                      primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: active ? 600 : 400, color: active ? '#F59E0B' : '#A8A29E' }}
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          </>
+        )}
       </Box>
 
       <Divider sx={{ borderColor: 'rgba(45,212,191,0.08)', mx: 2 }} />
-      {/* Admin profile */}
+      {/* Admin / Super Admin profile */}
       <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Avatar sx={{ width: 36, height: 36, background: 'linear-gradient(135deg,#2DD4BF,#0D9488)', fontSize: '0.85rem', fontWeight: 700 }}>
+        <Avatar sx={{
+          width: 36, height: 36,
+          background: user?.role === 'superadmin'
+            ? 'linear-gradient(135deg,#F59E0B,#D97706)'
+            : 'linear-gradient(135deg,#2DD4BF,#0D9488)',
+          fontSize: '0.85rem', fontWeight: 700,
+        }}>
           {user?.name?.[0] || 'A'}
         </Avatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ color: '#F0F6FF', fontSize: '0.85rem', fontWeight: 600 }} noWrap>{user?.name || 'Admin'}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Typography sx={{ color: '#F0F6FF', fontSize: '0.85rem', fontWeight: 600 }} noWrap>{user?.name || 'Admin'}</Typography>
+            {user?.role === 'superadmin' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                <AdminPanelSettingsIcon sx={{ fontSize: 14, color: '#F59E0B' }} />
+              </Box>
+            )}
+          </Box>
           <Typography sx={{ color: '#475569', fontSize: '0.72rem' }} noWrap>{user?.email}</Typography>
         </Box>
         <Tooltip title="Sign Out">
@@ -171,9 +295,15 @@ export default function DashboardLayout() {
             )}
             <Box sx={{ flex: 1 }} />
             <NotificationsPanel />
-            <Avatar sx={{ width: 34, height: 34, background: 'linear-gradient(135deg,#2DD4BF,#0D9488)', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-              {user?.name?.[0] || 'A'}
-            </Avatar>
+        <Avatar sx={{
+            width: 34, height: 34,
+            background: user?.role === 'superadmin'
+              ? 'linear-gradient(135deg,#F59E0B,#D97706)'
+              : 'linear-gradient(135deg,#2DD4BF,#0D9488)',
+            fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer',
+          }}>
+            {user?.name?.[0] || 'A'}
+          </Avatar>
           </Toolbar>
         </AppBar>
 
@@ -221,7 +351,17 @@ export default function DashboardLayout() {
                 <Typography sx={{ color: '#F0F6FF', fontSize: '0.85rem', fontWeight: 600 }}>{user.name}</Typography>
                 <Typography sx={{ color: '#475569', fontSize: '0.75rem' }}>{user.email}</Typography>
               </Box>
-              <Chip label="Admin" size="small" sx={{ ml: 'auto', background: 'rgba(45,212,191,0.1)', color: '#2DD4BF', border: '1px solid rgba(45,212,191,0.2)', fontWeight: 600, fontSize: '0.7rem' }} />
+              <Chip
+                label={user?.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                size="small"
+                sx={{
+                  ml: 'auto',
+                  background: user?.role === 'superadmin' ? 'rgba(245,158,11,0.15)' : 'rgba(45,212,191,0.1)',
+                  color: user?.role === 'superadmin' ? '#F59E0B' : '#2DD4BF',
+                  border: `1px solid ${user?.role === 'superadmin' ? 'rgba(245,158,11,0.3)' : 'rgba(45,212,191,0.2)'}`,
+                  fontWeight: 600, fontSize: '0.7rem',
+                }}
+              />
             </Box>
           )}
         </DialogContent>
@@ -251,6 +391,126 @@ export default function DashboardLayout() {
             }}
           >
             {logoutLoading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Sign Out'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Security Questions Setup Modal ─────────────────────────────── */}
+      <Dialog
+        open={setupOpen}
+        disableEscapeKeyDown
+        PaperProps={{
+          sx: {
+            background: 'rgba(13,27,42,0.97)',
+            border: '1px solid rgba(45,212,191,0.2)',
+            backdropFilter: 'blur(24px)',
+            borderRadius: 4,
+            minWidth: { xs: '90vw', sm: 500 },
+          },
+        }}
+        BackdropProps={{
+          sx: { backdropFilter: 'blur(4px)', background: 'rgba(7,13,24,0.6)' },
+        }}
+      >
+        <DialogTitle sx={{ color: '#F0F6FF', fontWeight: 700, pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <ShieldOutlinedIcon sx={{ color: '#2DD4BF' }} />
+            Security Questions Setup
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: '#94A3B8', mb: 3 }}>
+            To ensure account recovery is secure, please set up your security questions. You will need these to recover your admin account if you forget your password.
+          </DialogContentText>
+          
+          {setupError && (
+            <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, background: 'rgba(248,113,113,0.1)', color: '#F87171', border: '1px solid rgba(248,113,113,0.3)' }}>
+              {setupError}
+            </Box>
+          )}
+
+          {[0, 1, 2].map((idx) => (
+            <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel sx={{ color: '#94A3B8' }}>Question {idx + 1}</InputLabel>
+                <Select
+                  value={selectedQs[idx]}
+                  label={`Question ${idx + 1}`}
+                  onChange={(e) => {
+                    const newQs = [...selectedQs];
+                    newQs[idx] = e.target.value;
+                    setSelectedQs(newQs);
+                  }}
+                  sx={{ color: '#F0F6FF', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                >
+                  {SECURITY_QUESTIONS_PRESETS.map((q) => (
+                    <MenuItem key={q.id} value={q.id}>{q.question}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                size="small"
+                fullWidth
+                label="Answer"
+                value={answers[idx]}
+                onChange={(e) => {
+                  const newAnswers = [...answers];
+                  newAnswers[idx] = e.target.value;
+                  setAnswers(newAnswers);
+                }}
+                sx={{ '& .MuiOutlinedInput-root': { color: '#F0F6FF', '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' } }, '& .MuiInputLabel-root': { color: '#94A3B8' } }}
+              />
+            </Box>
+          ))}
+          <Box sx={{ mt: 1, mb: 1 }}>
+            <Typography sx={{ color: '#94A3B8', fontSize: '0.85rem', mb: 1 }}>
+              Enter your current password to encrypt and securely store it:
+            </Typography>
+            <TextField
+              size="small"
+              fullWidth
+              type="password"
+              label="Current Password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              sx={{ 
+                '& .MuiOutlinedInput-root': { 
+                  color: '#F0F6FF', 
+                  '& fieldset': { borderColor: 'rgba(255,255,255,0.2)' } 
+                }, 
+                '& .MuiInputLabel-root': { color: '#94A3B8' },
+                '& input:-webkit-autofill': {
+                  WebkitBoxShadow: '0 0 0 1000px #0D1B2A inset',
+                  WebkitTextFillColor: '#F0F6FF',
+                  caretColor: '#F0F6FF',
+                  borderRadius: 'inherit'
+                }
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setSetupOpen(false)}
+            disabled={setupLoading}
+            sx={{ color: '#94A3B8' }}
+          >
+            Skip
+          </Button>
+          <Button
+            onClick={handleSetupSubmit}
+            disabled={setupLoading}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(135deg, #2DD4BF, #0D9488)',
+              borderRadius: 2,
+              px: 3,
+              fontWeight: 700,
+              boxShadow: '0 4px 16px rgba(45,212,191,0.2)',
+              minWidth: 120,
+            }}
+          >
+            {setupLoading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Save Questions'}
           </Button>
         </DialogActions>
       </Dialog>

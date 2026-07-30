@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Card, CardContent, Typography, Grid, TextField, Button,
   Switch, Divider, Avatar, Chip, Alert, CircularProgress,
@@ -10,23 +11,30 @@ import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isRecovery = location.state?.forcePasswordChange;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword]         = useState('');
   const [pwdLoading, setPwdLoading]           = useState(false);
-  const [pwdMsg, setPwdMsg]                   = useState({ type: '', text: '' });
+  const [pwdMsg, setPwdMsg]                   = useState({ type: isRecovery ? 'warning' : '', text: isRecovery ? 'Account recovered. Please update your password now.' : '' });
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) {
-      setPwdMsg({ type: 'error', text: 'Both fields are required.' });
+    if (!isRecovery && !currentPassword) {
+      setPwdMsg({ type: 'error', text: 'Current password is required.' });
+      return;
+    }
+    if (!newPassword) {
+      setPwdMsg({ type: 'error', text: 'New password is required.' });
       return;
     }
     if (newPassword.length < 8) {
       setPwdMsg({ type: 'error', text: 'New password must be at least 8 characters.' });
       return;
     }
-    if (currentPassword === newPassword) {
+    if (!isRecovery && currentPassword === newPassword) {
       setPwdMsg({ type: 'error', text: 'New password must be different from the current one.' });
       return;
     }
@@ -34,11 +42,17 @@ export default function SettingsPage() {
     setPwdLoading(true);
     setPwdMsg({ type: '', text: '' });
     try {
-      // Re-authenticate first (required by Firebase before sensitive operations)
-      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+      const credentialPwd = isRecovery ? location.state.recoveryPassword : currentPassword;
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, credentialPwd);
       await reauthenticateWithCredential(auth.currentUser, credential);
       await updatePassword(auth.currentUser, newPassword);
-      setPwdMsg({ type: 'success', text: 'Password updated successfully.' });
+      
+      setPwdMsg({ type: 'success', text: isRecovery ? 'Password updated successfully. Recovery complete.' : 'Password updated successfully.' });
+      
+      if (isRecovery) {
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+      
       setCurrentPassword('');
       setNewPassword('');
     } catch (err) {
@@ -47,7 +61,7 @@ export default function SettingsPage() {
       } else if (err.code === 'auth/weak-password') {
         setPwdMsg({ type: 'error', text: 'New password is too weak. Use at least 8 characters.' });
       } else {
-        setPwdMsg({ type: 'error', text: 'Failed to update password. Please try again.' });
+        setPwdMsg({ type: 'error', text: err.message || 'Failed to update password. Please try again.' });
       }
     } finally {
       setPwdLoading(false);
@@ -116,20 +130,22 @@ export default function SettingsPage() {
                       helperText="Email cannot be changed here."
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Current Password"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="••••••••"
-                      size="small"
-                      required
-                      inputProps={{ maxLength: 128 }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
+                  {!isRecovery && (
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Current Password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="••••••••"
+                        size="small"
+                        required
+                        inputProps={{ maxLength: 128 }}
+                      />
+                    </Grid>
+                  )}
+                  <Grid item xs={12} sm={isRecovery ? 12 : 6}>
                     <TextField
                       fullWidth
                       label="New Password"
